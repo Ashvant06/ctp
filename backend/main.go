@@ -1,107 +1,91 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"strings"
 
+	"backend/handlers"
+	"backend/middleware"
+
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
 )
 
-type contextKey string
-
-const userClaimsKey contextKey = "userClaims"
-
-func verifyToken(tokenString string) (*jwt.Token, error) {
-	secret := os.Getenv("SUPABASE_JWT_SECRET")
-
-	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method")
-		}
-		return []byte(secret), nil
-	})
-}
-
-func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
+func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			http.Error(w, "Missing Authorization header", http.StatusUnauthorized)
+		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 
-		if !strings.HasPrefix(authHeader, "Bearer ") {
-			http.Error(w, "Invalid token format", http.StatusUnauthorized)
-			return
-		}
-
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-
-		token, err := verifyToken(tokenString)
-		if err != nil || !token.Valid {
-			http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
-			return
-		}
-
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
-			return
-		}
-
-		ctx := context.WithValue(r.Context(), userClaimsKey, claims)
-		next(w, r.WithContext(ctx))
+		next(w, r)
 	}
-}
-
-func homeHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "Public route")
-}
-
-func verifyHandler(w http.ResponseWriter, r *http.Request) {
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		http.Error(w, "Missing token", http.StatusUnauthorized)
-		return
-	}
-
-	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-
-	token, err := verifyToken(tokenString)
-	if err != nil || !token.Valid {
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
-		return
-	}
-
-	fmt.Fprintln(w, "Token is valid")
-}
-
-func protectedHandler(w http.ResponseWriter, r *http.Request) {
-	claims, ok := r.Context().Value(userClaimsKey).(jwt.MapClaims)
-	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	userID := claims["sub"]
-	email := claims["email"]
-
-	fmt.Fprintf(w, "✅ Authenticated user: %v (%v)\n", email, userID)
 }
 
 func main() {
 	if err := godotenv.Load(); err != nil {
-		log.Println("Note: .env file not found, relying on system environment variables")
+		log.Println("Note: .env file not found")
 	}
 
-	http.HandleFunc("/", homeHandler)
-	http.HandleFunc("/verify", verifyHandler)
-	http.HandleFunc("/protected", authMiddleware(protectedHandler))
+	os.MkdirAll("storage/raw", os.ModePerm)
+	os.MkdirAll("storage/hls", os.ModePerm)
+
+	// Public
+	http.HandleFunc("/", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "LMS API running")
+	}))
+
+	// Debug token received
+	http.HandleFunc("/debug/token", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		fmt.Fprintf(w, "Auth header received: %s\n", authHeader)
+	}))
+
+	// Debug verify token
+	http.HandleFunc("/debug/verify", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		secret := os.Getenv("SUPABASE_JWT_SECRET")
+		authHeader := r.Header.Get("Authorization")
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+
+		fmt.Fprintf(w, "Secret length: %d\n", len(secret))
+		fmt.Fprintf(w, "Token length: %d\n", len(tokenString))
+
+		// Parse without verification first
+		parser := jwt.NewParser()
+		token, _, err := parser.ParseUnverified(tokenString, jwt.MapClaims{})
+		if err != nil {
+			fmt.Fprintf(w, "Parse error: %v\n", err)
+			return
+		}
+
+		claims := token.Claims.(jwt.MapClaims)
+		fmt.Fprintf(w, "Algorithm: %s\n", token.Method.Alg())
+		fmt.Fprintf(w, "User ID: %v\n", claims["sub"])
+		fmt.Fprintf(w, "Role: %v\n", claims["role"])
+		fmt.Fprintf(w, "Issuer: %v\n", claims["iss"])
+	}))
+
+	// HLS static files
+	fs := http.FileServer(http.Dir("storage/hls"))
+	http.Handle("/stream/", corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		http.StripPrefix("/stream/", fs).ServeHTTP(w, r)
+	}))
+
+	// Admin routes
+	http.HandleFunc("/admin/courses", corsMiddleware(middleware.Auth(middleware.AdminOnly(handlers.CoursesHandler))))
+	http.HandleFunc("/admin/sections", corsMiddleware(middleware.Auth(middleware.AdminOnly(handlers.SectionsHandler))))
+	http.HandleFunc("/admin/lessons/upload", corsMiddleware(middleware.Auth(middleware.AdminOnly(handlers.UploadLessonHandler))))
+
+	// Public course routes
+	http.HandleFunc("/courses", corsMiddleware(handlers.GetCoursesHandler))
+	http.HandleFunc("/courses/", corsMiddleware(handlers.GetCourseHandler))
 
 	fmt.Println("Server running on http://localhost:8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
