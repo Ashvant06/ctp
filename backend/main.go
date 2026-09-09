@@ -87,8 +87,18 @@ func main() {
 	http.HandleFunc("/courses", corsMiddleware(handlers.GetCoursesHandler))
 	http.HandleFunc("/courses/", corsMiddleware(handlers.GetCourseHandler))
 
-	fmt.Println("Server running on http://localhost:8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		log.Fatalf("Server failed: %v", err)
+	// Render provides the PORT environment variable.
+	// Locally, if PORT is not set, use 8080.
+	port := os.Getenv("PORT")
+
+	if port == "" {
+		port = "8080"
+	}
+
+	log.Printf("Server running on port %s", port)
+
+	err := http.ListenAndServe(":"+port, nil)
+	if err != nil {
+		log.Fatal(err)
 	}
 }
