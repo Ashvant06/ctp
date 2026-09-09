@@ -2,85 +2,95 @@ package middleware
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strings"
-
-	"github.com/golang-jwt/jwt/v5"
 )
 
 type contextKey string
 
 const UserClaimsKey contextKey = "userClaims"
 
-func verifyToken(tokenString string) (*jwt.Token, error) {
-	secret := os.Getenv("SUPABASE_JWT_SECRET")
+type SupabaseUser struct {
+	ID    string `json:"id"`
+	Email string `json:"email"`
+}
 
-	// Supabase JWT secrets are base64-encoded; decode before use
-	decodedSecret, err := base64.StdEncoding.DecodeString(secret)
+func verifyTokenWithSupabase(tokenString string) (*SupabaseUser, error) {
+	supabaseURL := os.Getenv("SUPABASE_URL")
+	supabaseKey := os.Getenv("SUPABASE_ANON_KEY")
+
+	req, err := http.NewRequest("GET", supabaseURL+"/auth/v1/user", nil)
 	if err != nil {
-		// Fall back to raw secret if not valid base64
-		log.Printf("JWT secret is not valid base64, using raw bytes: %v", err)
-		decodedSecret = []byte(secret)
+		return nil, err
 	}
 
-	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return decodedSecret, nil
-	})
+	req.Header.Set("apikey", supabaseKey)
+	req.Header.Set("Authorization", "Bearer "+tokenString)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("invalid or expired token")
+	}
+
+	var user SupabaseUser
+	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil {
+		return nil, err
+	}
+
+	if user.ID == "" {
+		return nil, fmt.Errorf("invalid user")
+	}
+
+	return &user, nil
 }
 
 func Auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			log.Printf("Auth: Missing or invalid Authorization header")
 			http.Error(w, "Missing or invalid Authorization header", http.StatusUnauthorized)
 			return
 		}
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		token, err := verifyToken(tokenString)
-		if err != nil || !token.Valid {
-			log.Printf("Auth: Token verification failed: %v", err)
+
+		user, err := verifyTokenWithSupabase(tokenString)
+		if err != nil {
 			http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
 			return
 		}
 
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
-			return
-		}
-
-		log.Printf("Auth: Verified user %v", claims["sub"])
-		ctx := context.WithValue(r.Context(), UserClaimsKey, claims)
+		ctx := context.WithValue(r.Context(), UserClaimsKey, map[string]string{
+			"sub":   user.ID,
+			"email": user.Email,
+		})
 		next(w, r.WithContext(ctx))
 	}
 }
 
 func AdminOnly(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		claims, ok := r.Context().Value(UserClaimsKey).(jwt.MapClaims)
+		claims, ok := r.Context().Value(UserClaimsKey).(map[string]string)
 		if !ok {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		// Get user ID from JWT
-		userID, ok := claims["sub"].(string)
-		if !ok || userID == "" {
-			http.Error(w, "Invalid token: missing user ID", http.StatusUnauthorized)
+		userID := claims["sub"]
+		if userID == "" {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		// Check role from Supabase profiles table
 		role, err := getRoleFromSupabase(userID)
 		if err != nil {
 			http.Error(w, "Failed to verify role", http.StatusInternalServerError)

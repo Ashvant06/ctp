@@ -23,320 +23,203 @@ export default function CreateCourse() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const addSection = () => {
-    setSections([...sections, { title: "", lessons: [{ title: "", file: null, status: "idle" }] }]);
+  const addSection = () => setSections([...sections, { title: "", lessons: [{ title: "", file: null, status: "idle" }] }]);
+
+  const addLesson = (si: number) => {
+    const u = [...sections];
+    u[si].lessons.push({ title: "", file: null, status: "idle" });
+    setSections(u);
   };
 
-  const addLesson = (sectionIndex: number) => {
-    const updated = [...sections];
-    updated[sectionIndex].lessons.push({ title: "", file: null, status: "idle" });
-    setSections(updated);
+  const updateSection = (i: number, title: string) => {
+    const u = [...sections]; u[i].title = title; setSections(u);
   };
 
-  const updateSectionTitle = (index: number, title: string) => {
-    const updated = [...sections];
-    updated[index].title = title;
-    setSections(updated);
+  const updateLessonTitle = (si: number, li: number, title: string) => {
+    const u = [...sections]; u[si].lessons[li].title = title; setSections(u);
   };
 
-  const updateLessonTitle = (sectionIndex: number, lessonIndex: number, title: string) => {
-    const updated = [...sections];
-    updated[sectionIndex].lessons[lessonIndex].title = title;
-    setSections(updated);
+  const updateLessonFile = (si: number, li: number, file: File) => {
+    const u = [...sections]; u[si].lessons[li].file = file; setSections(u);
   };
 
-  const updateLessonFile = (sectionIndex: number, lessonIndex: number, file: File) => {
-    const updated = [...sections];
-    updated[sectionIndex].lessons[lessonIndex].file = file;
-    setSections(updated);
-  };
-
-  const updateLessonStatus = (sectionIndex: number, lessonIndex: number, status: Lesson["status"]) => {
-    const updated = [...sections];
-    updated[sectionIndex].lessons[lessonIndex].status = status;
-    setSections([...updated]);
+  const updateLessonStatus = (si: number, li: number, status: Lesson["status"]) => {
+    const u = [...sections]; u[si].lessons[li].status = status; setSections([...u]);
   };
 
   const handleSubmit = async () => {
     setError("");
-
-    if (!courseTitle.trim()) {
-      setError("Course title is required");
-      return;
-    }
-
-    for (const section of sections) {
-      if (!section.title.trim()) {
-        setError("All section titles are required");
-        return;
-      }
-      for (const lesson of section.lessons) {
-        if (!lesson.title.trim() || !lesson.file) {
-          setError("All lessons need a title and video file");
-          return;
-        }
+    if (!courseTitle.trim()) { setError("Course title is required"); return; }
+    for (const s of sections) {
+      if (!s.title.trim()) { setError("All section titles are required"); return; }
+      for (const l of s.lessons) {
+        if (!l.title.trim() || !l.file) { setError("All lessons need a title and video file"); return; }
       }
     }
-
     setSaving(true);
-
     try {
-      // Get session and token
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
+      if (!token) { setError("Not authenticated. Please log in again."); setSaving(false); return; }
 
-      // Debug logs
-      console.log("Session:", session);
-      console.log("Token:", token);
-
-      if (!token) {
-        setError("Not authenticated. Please log in again.");
-        setSaving(false);
-        return;
-      }
-
-      // Test debug endpoint first
-      const debugRes = await fetch("http://localhost:8080/debug/token", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const debugText = await debugRes.text();
-      console.log("Debug response:", debugText);
-
-      // 1. Create course
       const courseRes = await fetch("http://localhost:8080/admin/courses", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          title: courseTitle,
-          description: courseDescription,
-        }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ title: courseTitle, description: courseDescription }),
       });
-
-      console.log("Course response status:", courseRes.status);
-
-      if (!courseRes.ok) {
-        const errText = await courseRes.text();
-        console.error("Course error:", errText);
-        throw new Error(`Failed to create course: ${errText}`);
-      }
-
+      if (!courseRes.ok) throw new Error(await courseRes.text());
       const courseData = await courseRes.json();
-      console.log("Course data:", courseData);
       const courseId = courseData[0]?.id;
 
-      // 2. Create sections and upload lessons
       for (let si = 0; si < sections.length; si++) {
         const section = sections[si];
-
         const sectionRes = await fetch("http://localhost:8080/admin/sections", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            course_id: courseId,
-            title: section.title,
-            order_index: si,
-          }),
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ course_id: courseId, title: section.title, order_index: si }),
         });
-
-        console.log("Section response status:", sectionRes.status);
-
-        if (!sectionRes.ok) {
-          const errText = await sectionRes.text();
-          console.error("Section error:", errText);
-          throw new Error(`Failed to create section: ${errText}`);
-        }
-
+        if (!sectionRes.ok) throw new Error(await sectionRes.text());
         const sectionData = await sectionRes.json();
         const sectionId = sectionData[0]?.id;
 
-        // 3. Upload lessons
         for (let li = 0; li < section.lessons.length; li++) {
           const lesson = section.lessons[li];
           updateLessonStatus(si, li, "uploading");
-
           const formData = new FormData();
           formData.append("title", lesson.title);
           formData.append("course_id", courseId);
           formData.append("section_id", sectionId);
           formData.append("order_index", String(li));
           formData.append("video", lesson.file!);
-
           const lessonRes = await fetch("http://localhost:8080/admin/lessons/upload", {
             method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+            headers: { Authorization: `Bearer ${token}` },
             body: formData,
           });
-
-          console.log("Lesson response status:", lessonRes.status);
-
-          if (!lessonRes.ok) {
-            const errText = await lessonRes.text();
-            console.error("Lesson error:", errText);
-            updateLessonStatus(si, li, "error");
-            throw new Error(`Failed to upload lesson: ${errText}`);
-          }
-
+          if (!lessonRes.ok) { updateLessonStatus(si, li, "error"); throw new Error(await lessonRes.text()); }
           updateLessonStatus(si, li, "processing");
         }
       }
-
       navigate("/admin");
     } catch (err: any) {
-      console.error("Submit error:", err);
       setError(err.message || "Something went wrong");
     } finally {
       setSaving(false);
     }
   };
 
+  const statusMap = {
+    idle: { label: "Pending", color: "var(--text-muted)", bg: "var(--bg-elevated)" },
+    uploading: { label: "Uploading...", color: "var(--warning)", bg: "var(--warning-soft)" },
+    processing: { label: "Processing...", color: "#378ADD", bg: "rgba(55,138,221,0.15)" },
+    ready: { label: "Ready ✓", color: "var(--success)", bg: "var(--success-soft)" },
+    error: { label: "Error ✗", color: "var(--error)", bg: "var(--error-soft)" },
+  };
+
   return (
-    <div style={styles.page}>
-      <div style={styles.header}>
-        <button onClick={() => navigate("/admin")} style={styles.backBtn}>
-          ← Back
-        </button>
-        <h1 style={styles.title}>Create New Course</h1>
+    <div style={s.page}>
+      <div style={s.header}>
+        <button onClick={() => navigate("/admin")} style={s.backBtn}>← Back</button>
+        <div>
+          <h1 style={s.title}>Create new course</h1>
+          <p style={s.subtitle}>Fill in the details and upload your videos</p>
+        </div>
       </div>
 
-      <div style={styles.form}>
-        {/* Course Info */}
-        <div style={styles.card}>
-          <h2 style={styles.cardTitle}>Course Information</h2>
-
-          <label style={styles.label}>Course Title *</label>
-          <input
-            style={styles.input}
-            placeholder="e.g. Complete React Developer Course"
-            value={courseTitle}
-            onChange={(e) => setCourseTitle(e.target.value)}
-          />
-
-          <label style={styles.label}>Description</label>
-          <textarea
-            style={styles.textarea}
-            placeholder="What will students learn?"
-            value={courseDescription}
-            onChange={(e) => setCourseDescription(e.target.value)}
-            rows={4}
-          />
+      <div style={s.form}>
+        <div style={s.card}>
+          <h2 style={s.cardTitle}>Course information</h2>
+          <label style={s.label}>Title *</label>
+          <input style={s.input} placeholder="e.g. Complete React Developer Course"
+            value={courseTitle} onChange={e => setCourseTitle(e.target.value)}
+            onFocus={e => e.target.style.borderColor = "var(--accent)"}
+            onBlur={e => e.target.style.borderColor = "var(--border)"} />
+          <label style={s.label}>Description</label>
+          <textarea style={s.textarea} placeholder="What will students learn from this course?"
+            value={courseDescription} onChange={e => setCourseDescription(e.target.value)}
+            rows={3}
+            onFocus={(e: any) => e.target.style.borderColor = "var(--accent)"}
+            onBlur={(e: any) => e.target.style.borderColor = "var(--border)"} />
         </div>
 
-        {/* Sections */}
         {sections.map((section, si) => (
-          <div key={si} style={styles.card}>
-            <h2 style={styles.cardTitle}>Section {si + 1}</h2>
+          <div key={si} style={s.card}>
+            <div style={s.sectionHead}>
+              <h2 style={s.cardTitle}>Section {si + 1}</h2>
+              <span style={s.sectionBadge}>{section.lessons.length} lesson{section.lessons.length !== 1 ? "s" : ""}</span>
+            </div>
+            <label style={s.label}>Section title *</label>
+            <input style={s.input} placeholder="e.g. Getting Started"
+              value={section.title} onChange={e => updateSection(si, e.target.value)}
+              onFocus={e => e.target.style.borderColor = "var(--accent)"}
+              onBlur={e => e.target.style.borderColor = "var(--border)"} />
 
-            <label style={styles.label}>Section Title *</label>
-            <input
-              style={styles.input}
-              placeholder="e.g. Getting Started"
-              value={section.title}
-              onChange={(e) => updateSectionTitle(si, e.target.value)}
-            />
+            <div style={s.lessonsWrap}>
+              {section.lessons.map((lesson, li) => {
+                const st = statusMap[lesson.status];
+                return (
+                  <div key={li} style={s.lessonCard}>
+                    <div style={s.lessonHead}>
+                      <span style={s.lessonNum}>Lesson {li + 1}</span>
+                      <span style={{ ...s.badge, color: st.color, background: st.bg }}>{st.label}</span>
+                    </div>
+                    <label style={s.label}>Lesson title *</label>
+                    <input style={s.input} placeholder="e.g. Introduction"
+                      value={lesson.title} onChange={e => updateLessonTitle(si, li, e.target.value)}
+                      onFocus={e => e.target.style.borderColor = "var(--accent)"}
+                      onBlur={e => e.target.style.borderColor = "var(--border)"} />
+                    <label style={s.label}>Video file *</label>
+                    <label style={s.fileLabel}>
+                      <input type="file" accept="video/*" style={{ display: "none" }}
+                        onChange={e => { if (e.target.files?.[0]) updateLessonFile(si, li, e.target.files[0]); }} />
+                      <span style={s.fileBtn}>Choose file</span>
+                      <span style={s.fileName}>{lesson.file ? lesson.file.name : "No file chosen"}</span>
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
 
-            <h3 style={styles.lessonsTitle}>Lessons</h3>
-
-            {section.lessons.map((lesson, li) => (
-              <div key={li} style={styles.lessonRow}>
-                <div style={styles.lessonHeader}>
-                  <span style={styles.lessonNumber}>Lesson {li + 1}</span>
-                  <StatusBadge status={lesson.status} />
-                </div>
-
-                <label style={styles.label}>Lesson Title *</label>
-                <input
-                  style={styles.input}
-                  placeholder="e.g. Introduction to React"
-                  value={lesson.title}
-                  onChange={(e) => updateLessonTitle(si, li, e.target.value)}
-                />
-
-                <label style={styles.label}>Video File *</label>
-                <input
-                  type="file"
-                  accept="video/*"
-                  style={styles.fileInput}
-                  onChange={(e) => {
-                    if (e.target.files?.[0]) {
-                      updateLessonFile(si, li, e.target.files[0]);
-                    }
-                  }}
-                />
-                {lesson.file && (
-                  <p style={styles.fileName}>📹 {lesson.file.name}</p>
-                )}
-              </div>
-            ))}
-
-            <button onClick={() => addLesson(si)} style={styles.addLessonBtn}>
-              + Add Lesson
-            </button>
+            <button onClick={() => addLesson(si)} style={s.addLessonBtn}>+ Add lesson</button>
           </div>
         ))}
 
-        <button onClick={addSection} style={styles.addSectionBtn}>
-          + Add Section
-        </button>
+        <button onClick={addSection} style={s.addSectionBtn}>+ Add section</button>
 
-        {error && <p style={styles.error}>{error}</p>}
+        {error && <div style={s.error}>{error}</div>}
 
-        <button
-          onClick={handleSubmit}
-          disabled={saving}
-          style={styles.submitBtn}
-        >
-          {saving ? "Creating Course..." : "Create Course"}
+        <button onClick={handleSubmit} disabled={saving} style={s.submitBtn}>
+          {saving ? "Creating course..." : "Create course"}
         </button>
       </div>
     </div>
   );
 }
 
-function StatusBadge({ status }: { status: Lesson["status"] }) {
-  const map: Record<Lesson["status"], { label: string; color: string; bg: string }> = {
-    idle: { label: "Pending", color: "#6b7280", bg: "#f3f4f6" },
-    uploading: { label: "Uploading...", color: "#d97706", bg: "#fef3c7" },
-    processing: { label: "Processing...", color: "#2563eb", bg: "#dbeafe" },
-    ready: { label: "Ready", color: "#16a34a", bg: "#dcfce7" },
-    error: { label: "Error", color: "#dc2626", bg: "#fee2e2" },
-  };
-
-  const s = map[status];
-  return (
-    <span style={{ ...styles.badge, color: s.color, background: s.bg }}>
-      {s.label}
-    </span>
-  );
-}
-
-const styles: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100vh", background: "#f5f7fb", padding: "32px" },
-  header: { display: "flex", alignItems: "center", gap: "16px", marginBottom: "32px" },
-  backBtn: { padding: "8px 16px", border: "1px solid #d1d5db", borderRadius: "8px", background: "#fff", cursor: "pointer", fontSize: "14px" },
-  title: { fontSize: "24px", fontWeight: 700, color: "#111827", margin: 0 },
-  form: { maxWidth: "760px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "24px" },
-  card: { background: "#fff", border: "1px solid #e5e7eb", borderRadius: "12px", padding: "24px" },
-  cardTitle: { fontSize: "18px", fontWeight: 700, color: "#111827", marginBottom: "20px", marginTop: 0 },
-  label: { display: "block", fontSize: "14px", fontWeight: 600, color: "#374151", marginBottom: "6px" },
-  input: { width: "100%", boxSizing: "border-box", padding: "11px", border: "1px solid #d1d5db", borderRadius: "8px", fontSize: "14px", marginBottom: "16px" },
-  textarea: { width: "100%", boxSizing: "border-box", padding: "11px", border: "1px solid #d1d5db", borderRadius: "8px", fontSize: "14px", marginBottom: "16px", resize: "vertical" },
-  fileInput: { display: "block", marginBottom: "8px" },
-  fileName: { fontSize: "13px", color: "#6b7280", marginBottom: "16px" },
-  lessonsTitle: { fontSize: "15px", fontWeight: 600, color: "#374151", marginBottom: "16px" },
-  lessonRow: { background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "8px", padding: "16px", marginBottom: "12px" },
-  lessonHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" },
-  lessonNumber: { fontSize: "14px", fontWeight: 600, color: "#111827" },
-  badge: { fontSize: "12px", fontWeight: 600, padding: "3px 10px", borderRadius: "20px" },
-  addLessonBtn: { padding: "9px 16px", border: "1px dashed #d1d5db", borderRadius: "8px", background: "#fff", cursor: "pointer", fontSize: "14px", color: "#374151", marginTop: "8px" },
-  addSectionBtn: { padding: "12px", border: "2px dashed #d1d5db", borderRadius: "10px", background: "#fff", cursor: "pointer", fontSize: "15px", fontWeight: 600, color: "#374151" },
-  submitBtn: { padding: "14px", background: "#111827", color: "#fff", border: "none", borderRadius: "10px", fontSize: "16px", fontWeight: 700, cursor: "pointer" },
-  error: { color: "#dc2626", fontSize: "14px", textAlign: "center" },
+const s: Record<string, React.CSSProperties> = {
+  page: { minHeight: "100vh", background: "var(--bg-primary)", padding: "28px" },
+  header: { display: "flex", alignItems: "center", gap: "20px", marginBottom: "28px", maxWidth: "760px", margin: "0 auto 28px" },
+  backBtn: { padding: "8px 16px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--text-secondary)", fontSize: "13px", cursor: "pointer", flexShrink: 0 },
+  title: { fontSize: "22px", fontWeight: 700, color: "var(--text-primary)" },
+  subtitle: { fontSize: "13px", color: "var(--text-muted)", marginTop: "2px" },
+  form: { maxWidth: "760px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "20px" },
+  card: { background: "var(--bg-secondary)", border: "1px solid var(--border-light)", borderRadius: "var(--radius-md)", padding: "24px" },
+  cardTitle: { fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "20px" },
+  sectionHead: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" },
+  sectionBadge: { fontSize: "12px", color: "var(--accent)", background: "var(--accent-soft)", padding: "3px 10px", borderRadius: "20px" },
+  label: { display: "block", fontSize: "13px", fontWeight: 500, color: "var(--text-secondary)", marginBottom: "6px" },
+  input: { width: "100%", padding: "10px 14px", background: "var(--bg-tertiary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--text-primary)", fontSize: "14px", marginBottom: "16px", outline: "none", transition: "border-color 0.2s" },
+  textarea: { width: "100%", padding: "10px 14px", background: "var(--bg-tertiary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", color: "var(--text-primary)", fontSize: "14px", marginBottom: "16px", outline: "none", resize: "vertical", transition: "border-color 0.2s" },
+  lessonsWrap: { display: "flex", flexDirection: "column", gap: "12px", marginBottom: "16px" },
+  lessonCard: { background: "var(--bg-tertiary)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "16px" },
+  lessonHead: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" },
+  lessonNum: { fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" },
+  badge: { fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "20px" },
+  fileLabel: { display: "flex", alignItems: "center", gap: "10px", marginBottom: "0", cursor: "pointer" },
+  fileBtn: { padding: "7px 14px", background: "var(--bg-elevated)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", fontSize: "12px", color: "var(--text-secondary)", flexShrink: 0 },
+  fileName: { fontSize: "13px", color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  addLessonBtn: { padding: "9px 16px", background: "transparent", border: "1px dashed var(--border)", borderRadius: "var(--radius-sm)", color: "var(--text-muted)", fontSize: "13px", cursor: "pointer", width: "100%" },
+  addSectionBtn: { padding: "14px", background: "transparent", border: "2px dashed var(--border)", borderRadius: "var(--radius-md)", color: "var(--text-muted)", fontSize: "14px", fontWeight: 500, cursor: "pointer" },
+  error: { background: "var(--error-soft)", border: "1px solid var(--error)", color: "var(--error)", borderRadius: "var(--radius-sm)", padding: "12px 14px", fontSize: "13px" },
+  submitBtn: { padding: "14px", background: "var(--accent)", color: "#fff", borderRadius: "var(--radius-md)", fontSize: "15px", fontWeight: 700, cursor: "pointer", border: "none" },
 };

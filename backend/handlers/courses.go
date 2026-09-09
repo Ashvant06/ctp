@@ -89,7 +89,6 @@ func GetCoursesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetCourseHandler(w http.ResponseWriter, r *http.Request) {
-	// Extract course ID from URL /courses/{id}
 	id := strings.TrimPrefix(r.URL.Path, "/courses/")
 	if id == "" {
 		http.Error(w, "Course ID required", http.StatusBadRequest)

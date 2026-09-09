@@ -13,7 +13,7 @@ export default function VideoPlayer({ hlsUrl }: VideoPlayerProps) {
     if (!video || !hlsUrl) return;
 
     if (Hls.isSupported()) {
-      const hls = new Hls();
+      const hls = new Hls({ enableWorker: true });
       hls.loadSource(hlsUrl);
       hls.attachMedia(video);
       return () => hls.destroy();
@@ -26,17 +26,15 @@ export default function VideoPlayer({ hlsUrl }: VideoPlayerProps) {
     <video
       ref={videoRef}
       controls
-      style={styles.video}
+      autoPlay
+      style={{
+        width: "100%",
+        height: "100%",
+        maxHeight: "calc(100vh - 160px)",
+        background: "#000",
+        outline: "none",
+      }}
       playsInline
     />
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  video: {
-    width: "100%",
-    height: "100%",
-    background: "#000",
-    borderRadius: "8px",
-  },
-};
