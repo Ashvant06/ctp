@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 interface Lesson {
   title: string;
   file: File | null;
@@ -62,7 +64,7 @@ export default function CreateCourse() {
       const token = session?.access_token;
       if (!token) { setError("Not authenticated. Please log in again."); setSaving(false); return; }
 
-      const courseRes = await fetch("http://localhost:8080/admin/courses", {
+      const courseRes = await fetch(`${API_URL}/admin/courses`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ title: courseTitle, description: courseDescription }),
@@ -73,7 +75,7 @@ export default function CreateCourse() {
 
       for (let si = 0; si < sections.length; si++) {
         const section = sections[si];
-        const sectionRes = await fetch("http://localhost:8080/admin/sections", {
+        const sectionRes = await fetch(`${API_URL}/admin/sections`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ course_id: courseId, title: section.title, order_index: si }),
@@ -91,7 +93,7 @@ export default function CreateCourse() {
           formData.append("section_id", sectionId);
           formData.append("order_index", String(li));
           formData.append("video", lesson.file!);
-          const lessonRes = await fetch("http://localhost:8080/admin/lessons/upload", {
+          const lessonRes = await fetch(`${API_URL}/admin/lessons/upload`, {
             method: "POST",
             headers: { Authorization: `Bearer ${token}` },
             body: formData,
