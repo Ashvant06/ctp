@@ -40,7 +40,7 @@ export default function Login() {
       <div style={s.card}>
         <div style={s.logo}>
           <span style={s.logoIcon}>▶</span>
-          <span style={s.logoText}>LearnHub</span>
+          <span style={s.logoText}>CTP Learner</span>
         </div>
 
         <h1 style={s.title}>Welcome back</h1>
