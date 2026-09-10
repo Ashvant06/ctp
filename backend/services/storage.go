@@ -30,7 +30,7 @@ func CreateSignedUploadURL(path string) (*SignedUploadResponse, error) {
 	}
 
 	endpoint := fmt.Sprintf(
-		"%s/storage/v1/object/upload/sign/course-videos/%s",
+		"%s/storage/v1/object/upload/sign/CTP-Courses/%s",
 		supabaseURL,
 		path,
 	)
@@ -75,7 +75,7 @@ func CreateSignedDownloadURL(path string, expiresIn int) (string, error) {
 	serviceRoleKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 	endpoint := fmt.Sprintf(
-		"%s/storage/v1/object/sign/course-videos/%s",
+		"%s/storage/v1/object/sign/CTP-Courses/%s",
 		supabaseURL,
 		path,
 	)
