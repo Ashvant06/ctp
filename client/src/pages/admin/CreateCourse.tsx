@@ -2,12 +2,11 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 
-const API_URL = import.meta.env.VITE_API_URL;
-
 interface Lesson {
   title: string;
   file: File | null;
-  status: "idle" | "uploading" | "processing" | "ready" | "error";
+  status: "idle" | "uploading" | "confirming" | "ready" | "error";
+  progress: number;
 }
 
 interface Section {
@@ -20,16 +19,16 @@ export default function CreateCourse() {
   const [courseTitle, setCourseTitle] = useState("");
   const [courseDescription, setCourseDescription] = useState("");
   const [sections, setSections] = useState<Section[]>([
-    { title: "", lessons: [{ title: "", file: null, status: "idle" }] },
+    { title: "", lessons: [{ title: "", file: null, status: "idle", progress: 0 }] },
   ]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const addSection = () => setSections([...sections, { title: "", lessons: [{ title: "", file: null, status: "idle" }] }]);
+  const addSection = () => setSections([...sections, { title: "", lessons: [{ title: "", file: null, status: "idle", progress: 0 }] }]);
 
   const addLesson = (si: number) => {
     const u = [...sections];
-    u[si].lessons.push({ title: "", file: null, status: "idle" });
+    u[si].lessons.push({ title: "", file: null, status: "idle", progress: 0 });
     setSections(u);
   };
 
@@ -45,26 +44,34 @@ export default function CreateCourse() {
     const u = [...sections]; u[si].lessons[li].file = file; setSections(u);
   };
 
-  const updateLessonStatus = (si: number, li: number, status: Lesson["status"]) => {
-    const u = [...sections]; u[si].lessons[li].status = status; setSections([...u]);
+  const updateLesson = (si: number, li: number, patch: Partial<Lesson>) => {
+    setSections(prev => {
+      const u = [...prev];
+      u[si].lessons[li] = { ...u[si].lessons[li], ...patch };
+      return [...u];
+    });
   };
 
   const handleSubmit = async () => {
     setError("");
+
     if (!courseTitle.trim()) { setError("Course title is required"); return; }
     for (const s of sections) {
       if (!s.title.trim()) { setError("All section titles are required"); return; }
       for (const l of s.lessons) {
-        if (!l.title.trim() || !l.file) { setError("All lessons need a title and video file"); return; }
+        if (!l.title.trim() || !l.file) { setError("All lessons need a title and video"); return; }
       }
     }
+
     setSaving(true);
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
-      if (!token) { setError("Not authenticated. Please log in again."); setSaving(false); return; }
+      if (!token) { setError("Not authenticated."); setSaving(false); return; }
 
-      const courseRes = await fetch(`${API_URL}/admin/courses`, {
+      // 1. Create course
+      const courseRes = await fetch("http://localhost:8080/admin/courses", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ title: courseTitle, description: courseDescription }),
@@ -73,9 +80,11 @@ export default function CreateCourse() {
       const courseData = await courseRes.json();
       const courseId = courseData[0]?.id;
 
+      // 2. Create sections + upload lessons
       for (let si = 0; si < sections.length; si++) {
         const section = sections[si];
-        const sectionRes = await fetch(`${API_URL}/admin/sections`, {
+
+        const sectionRes = await fetch("http://localhost:8080/admin/sections", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ course_id: courseId, title: section.title, order_index: si }),
@@ -86,22 +95,49 @@ export default function CreateCourse() {
 
         for (let li = 0; li < section.lessons.length; li++) {
           const lesson = section.lessons[li];
-          updateLessonStatus(si, li, "uploading");
-          const formData = new FormData();
-          formData.append("title", lesson.title);
-          formData.append("course_id", courseId);
-          formData.append("section_id", sectionId);
-          formData.append("order_index", String(li));
-          formData.append("video", lesson.file!);
-          const lessonRes = await fetch(`${API_URL}/admin/lessons/upload`, {
+
+          // Step A: Get signed upload URL from Go
+          updateLesson(si, li, { status: "uploading", progress: 0 });
+
+          const urlRes = await fetch("http://localhost:8080/admin/videos/upload-url", {
             method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
-            body: formData,
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              course_id: courseId,
+              section_id: sectionId,
+              title: lesson.title,
+              order_index: li,
+            }),
           });
-          if (!lessonRes.ok) { updateLessonStatus(si, li, "error"); throw new Error(await lessonRes.text()); }
-          updateLessonStatus(si, li, "processing");
+          if (!urlRes.ok) throw new Error(await urlRes.text());
+          const { signed_url, token: uploadToken, path, lesson_id } = await urlRes.json();
+
+          // Step B: Upload directly to Supabase Storage
+          const { error: uploadError } = await supabase.storage
+            .from("course-videos")
+            .uploadToSignedUrl(path, uploadToken, lesson.file!, {
+              contentType: "video/mp4",
+            });
+
+          if (uploadError) {
+            updateLesson(si, li, { status: "error" });
+            throw new Error(`Upload failed: ${uploadError.message}`);
+          }
+
+          updateLesson(si, li, { status: "confirming", progress: 100 });
+
+          // Step C: Confirm upload to Go → updates lesson status to "ready"
+          const confirmRes = await fetch("http://localhost:8080/admin/videos/confirm", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ lesson_id, video_path: path }),
+          });
+          if (!confirmRes.ok) throw new Error(await confirmRes.text());
+
+          updateLesson(si, li, { status: "ready" });
         }
       }
+
       navigate("/admin");
     } catch (err: any) {
       setError(err.message || "Something went wrong");
@@ -113,7 +149,7 @@ export default function CreateCourse() {
   const statusMap = {
     idle: { label: "Pending", color: "var(--text-muted)", bg: "var(--bg-elevated)" },
     uploading: { label: "Uploading...", color: "var(--warning)", bg: "var(--warning-soft)" },
-    processing: { label: "Processing...", color: "#378ADD", bg: "rgba(55,138,221,0.15)" },
+    confirming: { label: "Confirming...", color: "#378ADD", bg: "rgba(55,138,221,0.15)" },
     ready: { label: "Ready ✓", color: "var(--success)", bg: "var(--success-soft)" },
     error: { label: "Error ✗", color: "var(--error)", bg: "var(--error-soft)" },
   };
@@ -124,7 +160,7 @@ export default function CreateCourse() {
         <button onClick={() => navigate("/admin")} style={s.backBtn}>← Back</button>
         <div>
           <h1 style={s.title}>Create new course</h1>
-          <p style={s.subtitle}>Fill in the details and upload your videos</p>
+          <p style={s.subtitle}>Videos upload directly to secure cloud storage</p>
         </div>
       </div>
 
@@ -137,9 +173,8 @@ export default function CreateCourse() {
             onFocus={e => e.target.style.borderColor = "var(--accent)"}
             onBlur={e => e.target.style.borderColor = "var(--border)"} />
           <label style={s.label}>Description</label>
-          <textarea style={s.textarea} placeholder="What will students learn from this course?"
-            value={courseDescription} onChange={e => setCourseDescription(e.target.value)}
-            rows={3}
+          <textarea style={s.textarea} placeholder="What will students learn?"
+            value={courseDescription} onChange={e => setCourseDescription(e.target.value)} rows={3}
             onFocus={(e: any) => e.target.style.borderColor = "var(--accent)"}
             onBlur={(e: any) => e.target.style.borderColor = "var(--border)"} />
         </div>
@@ -165,6 +200,11 @@ export default function CreateCourse() {
                       <span style={s.lessonNum}>Lesson {li + 1}</span>
                       <span style={{ ...s.badge, color: st.color, background: st.bg }}>{st.label}</span>
                     </div>
+                    {lesson.status === "uploading" && (
+                      <div style={s.progressBar}>
+                        <div style={{ ...s.progressFill, width: `${lesson.progress}%` }} />
+                      </div>
+                    )}
                     <label style={s.label}>Lesson title *</label>
                     <input style={s.input} placeholder="e.g. Introduction"
                       value={lesson.title} onChange={e => updateLessonTitle(si, li, e.target.value)}
@@ -172,7 +212,7 @@ export default function CreateCourse() {
                       onBlur={e => e.target.style.borderColor = "var(--border)"} />
                     <label style={s.label}>Video file *</label>
                     <label style={s.fileLabel}>
-                      <input type="file" accept="video/*" style={{ display: "none" }}
+                      <input type="file" accept="video/mp4,video/*" style={{ display: "none" }}
                         onChange={e => { if (e.target.files?.[0]) updateLessonFile(si, li, e.target.files[0]); }} />
                       <span style={s.fileBtn}>Choose file</span>
                       <span style={s.fileName}>{lesson.file ? lesson.file.name : "No file chosen"}</span>
@@ -181,15 +221,12 @@ export default function CreateCourse() {
                 );
               })}
             </div>
-
             <button onClick={() => addLesson(si)} style={s.addLessonBtn}>+ Add lesson</button>
           </div>
         ))}
 
         <button onClick={addSection} style={s.addSectionBtn}>+ Add section</button>
-
         {error && <div style={s.error}>{error}</div>}
-
         <button onClick={handleSubmit} disabled={saving} style={s.submitBtn}>
           {saving ? "Creating course..." : "Create course"}
         </button>
@@ -217,7 +254,9 @@ const s: Record<string, React.CSSProperties> = {
   lessonHead: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" },
   lessonNum: { fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" },
   badge: { fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "20px" },
-  fileLabel: { display: "flex", alignItems: "center", gap: "10px", marginBottom: "0", cursor: "pointer" },
+  progressBar: { height: "4px", background: "var(--bg-elevated)", borderRadius: "2px", marginBottom: "14px", overflow: "hidden" },
+  progressFill: { height: "100%", background: "var(--accent)", borderRadius: "2px", transition: "width 0.3s" },
+  fileLabel: { display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" },
   fileBtn: { padding: "7px 14px", background: "var(--bg-elevated)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", fontSize: "12px", color: "var(--text-secondary)", flexShrink: 0 },
   fileName: { fontSize: "13px", color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   addLessonBtn: { padding: "9px 16px", background: "transparent", border: "1px dashed var(--border)", borderRadius: "var(--radius-sm)", color: "var(--text-muted)", fontSize: "13px", cursor: "pointer", width: "100%" },
