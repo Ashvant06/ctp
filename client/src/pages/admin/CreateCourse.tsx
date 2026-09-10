@@ -114,7 +114,7 @@ export default function CreateCourse() {
 
           // Step B: Upload directly to Supabase Storage
           const { error: uploadError } = await supabase.storage
-            .from("course-videos")
+            .from("CTP-Courses")
             .uploadToSignedUrl(path, uploadToken, lesson.file!, {
               contentType: "video/mp4",
             });
