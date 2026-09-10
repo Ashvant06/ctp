@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"backend/services"
 
@@ -105,6 +106,9 @@ func createLessonRecord(lessonID string, req CreateUploadURLRequest) error {
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("Supabase lessons insert returned status %d", resp.StatusCode)
+	}
 	return nil
 }
 
@@ -130,6 +134,10 @@ func ConfirmVideoUploadHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "lesson_id and video_path are required", http.StatusBadRequest)
 		return
 	}
+	if !strings.HasSuffix(req.VideoPath, "/lessons/"+req.LessonID+"/video.mp4") || strings.Contains(req.VideoPath, "..") {
+		http.Error(w, "video_path does not match the lesson", http.StatusBadRequest)
+		return
+	}
 
 	supabaseURL := os.Getenv("SUPABASE_URL")
 	serviceKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
@@ -152,6 +160,10 @@ func ConfirmVideoUploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		http.Error(w, "Failed to update lesson", http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
@@ -197,6 +209,10 @@ func GetVideoPlayURLHandler(w http.ResponseWriter, r *http.Request) {
 
 	if len(lessons) == 0 || lessons[0].VideoPath == "" {
 		http.Error(w, "Lesson not found or video not ready", http.StatusNotFound)
+		return
+	}
+	if lessons[0].Status != "ready" {
+		http.Error(w, "Video is not ready", http.StatusConflict)
 		return
 	}
 

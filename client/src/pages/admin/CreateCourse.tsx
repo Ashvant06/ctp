@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../../lib/supabase";
+import { supabase, videoBucket } from "../../lib/supabase";
 
 interface Lesson {
   title: string;
@@ -114,7 +114,7 @@ export default function CreateCourse() {
 
           // Step B: Upload directly to Supabase Storage
           const { error: uploadError } = await supabase.storage
-            .from("CTP-Courses")
+            .from(videoBucket)
             .uploadToSignedUrl(path, uploadToken, lesson.file!, {
               contentType: "video/mp4",
             });
