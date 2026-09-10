@@ -110,7 +110,7 @@ export default function CreateCourse() {
             }),
           });
           if (!urlRes.ok) throw new Error(await urlRes.text());
-          const { signed_url, token: uploadToken, path, lesson_id } = await urlRes.json();
+          const { token: uploadToken, path, lesson_id } = await urlRes.json();
 
           // Step B: Upload directly to Supabase Storage
           const { error: uploadError } = await supabase.storage
