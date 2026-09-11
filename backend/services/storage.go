@@ -141,3 +141,35 @@ func CreateSignedDownloadURL(path string, expiresIn int) (string, error) {
 
 	return result.SignedURL, nil
 }
+
+func VideoObjectExists(path string) (bool, error) {
+	supabaseURL := os.Getenv("SUPABASE_URL")
+	serviceRoleKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
+	if supabaseURL == "" || serviceRoleKey == "" {
+		return false, fmt.Errorf("Supabase storage configuration is incomplete")
+	}
+	if path == "" {
+		return false, fmt.Errorf("storage path is empty")
+	}
+
+	endpoint := fmt.Sprintf("%s/storage/v1/object/%s/%s", supabaseURL, videoBucket(), path)
+	req, err := http.NewRequest(http.MethodHead, endpoint, nil)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("Authorization", "Bearer "+serviceRoleKey)
+	req.Header.Set("apikey", serviceRoleKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return false, nil
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return false, fmt.Errorf("Supabase Storage returned status %d", resp.StatusCode)
+	}
+	return true, nil
+}

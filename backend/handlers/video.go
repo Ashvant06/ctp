@@ -138,6 +138,15 @@ func ConfirmVideoUploadHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "video_path does not match the lesson", http.StatusBadRequest)
 		return
 	}
+	objectExists, err := services.VideoObjectExists(req.VideoPath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to verify uploaded video: %v", err), http.StatusBadGateway)
+		return
+	}
+	if !objectExists {
+		http.Error(w, "Uploaded video was not found in storage", http.StatusBadRequest)
+		return
+	}
 
 	supabaseURL := os.Getenv("SUPABASE_URL")
 	serviceKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
