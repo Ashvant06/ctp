@@ -132,7 +132,7 @@ func CreateSignedDownloadURL(path string, expiresIn int) (string, error) {
 		return "", fmt.Errorf("failed to parse signed URL: %w", err)
 	}
 	if !parsedURL.IsAbs() {
-		baseURL, err := url.Parse(strings.TrimRight(supabaseURL, "/"))
+		baseURL, err := url.Parse(strings.TrimRight(supabaseURL, "/") + "/storage/v1/")
 		if err != nil {
 			return "", fmt.Errorf("failed to parse Supabase URL: %w", err)
 		}
