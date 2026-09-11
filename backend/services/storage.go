@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 )
@@ -122,5 +123,21 @@ func CreateSignedDownloadURL(path string, expiresIn int) (string, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", err
 	}
+	if result.SignedURL == "" {
+		return "", fmt.Errorf("Supabase Storage returned an empty signed URL")
+	}
+
+	parsedURL, err := url.Parse(result.SignedURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse signed URL: %w", err)
+	}
+	if !parsedURL.IsAbs() {
+		baseURL, err := url.Parse(strings.TrimRight(supabaseURL, "/"))
+		if err != nil {
+			return "", fmt.Errorf("failed to parse Supabase URL: %w", err)
+		}
+		result.SignedURL = baseURL.ResolveReference(parsedURL).String()
+	}
+
 	return result.SignedURL, nil
 }

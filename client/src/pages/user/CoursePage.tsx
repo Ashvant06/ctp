@@ -117,8 +117,13 @@ export default function CoursePage() {
       return data.url;
     }
 
-    // Fallback: legacy hls_url (local storage)
-    if (lesson.hls_url) return lesson.hls_url;
+    if (lesson.hls_url) {
+      const legacyUrl = new URL(lesson.hls_url, API_URL);
+      if (legacyUrl.hostname === "localhost" || legacyUrl.hostname === "127.0.0.1") {
+        return `${API_URL}${legacyUrl.pathname}${legacyUrl.search}`;
+      }
+      return legacyUrl.toString();
+    }
 
     throw new Error("No video available for this lesson");
   };

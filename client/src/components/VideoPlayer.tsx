@@ -13,6 +13,16 @@ export default function VideoPlayer({ hlsUrl }: VideoPlayerProps) {
     const video = videoRef.current;
     if (!video || !hlsUrl) return;
 
+    const isHls = hlsUrl.includes(".m3u8");
+
+    if (!isHls) {
+      video.src = hlsUrl;
+      return () => {
+        video.removeAttribute("src");
+        video.load();
+      };
+    }
+
     if (Hls.isSupported()) {
       const hls = new Hls({ enableWorker: true });
       hls.loadSource(hlsUrl);
