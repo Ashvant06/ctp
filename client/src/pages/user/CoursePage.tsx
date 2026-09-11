@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import VideoPlayer from "../../components/VideoPlayer";
+import { API_URL } from "../../lib/api";
 
 interface Lesson {
   id: string;
@@ -50,12 +51,12 @@ export default function CoursePage() {
             .map((s: Section) => ({
               ...s,
               lessons: s.lessons.sort(
-                (a: Lesson, b: Lesson) => a.order_index - b.order_index
+                (a: Lesson, b: Lesson) => a.order_index - b.order_index,
               ),
             }));
           setCourse(data);
           const first = data.sections[0]?.lessons?.find(
-            (l: Lesson) => l.status === "ready"
+            (l: Lesson) => l.status === "ready",
           );
           if (first) handleSelectLesson(first);
         }
@@ -85,12 +86,12 @@ export default function CoursePage() {
                   sections: prev.sections.map((s) => ({
                     ...s,
                     lessons: s.lessons.map((l) =>
-                      l.id === payload.new.id ? { ...l, ...payload.new } : l
+                      l.id === payload.new.id ? { ...l, ...payload.new } : l,
                     ),
                   })),
-                }
+                },
           );
-        }
+        },
       )
       .subscribe();
     return () => {
@@ -101,12 +102,14 @@ export default function CoursePage() {
   const fetchPlayUrl = async (lesson: Lesson): Promise<string> => {
     // If lesson has video_path → use Go signed URL endpoint
     if (lesson.video_path) {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       const token = session?.access_token;
 
       const res = await fetch(
-        `http://localhost:8080/lessons/play?lesson_id=${lesson.id}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        `${API_URL}/lessons/play?lesson_id=${lesson.id}`,
+        { headers: { Authorization: `Bearer ${token}` } },
       );
 
       if (!res.ok) throw new Error("Failed to get play URL");
@@ -142,14 +145,33 @@ export default function CoursePage() {
 
   if (loading)
     return (
-      <div style={{ minHeight: "100vh", background: "#0f0f0f", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: "15px" }}>
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#0f0f0f",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "var(--text-muted)",
+          fontSize: "15px",
+        }}
+      >
         Loading course...
       </div>
     );
 
   if (!course)
     return (
-      <div style={{ minHeight: "100vh", background: "#0f0f0f", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)" }}>
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#0f0f0f",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "var(--text-muted)",
+        }}
+      >
         Course not found.
       </div>
     );
@@ -184,7 +206,14 @@ export default function CoursePage() {
             activeLesson.status === "ready" ? (
               urlLoading ? (
                 <div style={s.processingBox}>
-                  <div style={{ ...s.processingIcon, animation: "spin 1s linear infinite" }}>⟳</div>
+                  <div
+                    style={{
+                      ...s.processingIcon,
+                      animation: "spin 1s linear infinite",
+                    }}
+                  >
+                    ⟳
+                  </div>
                   <p style={s.processingText}>Loading video...</p>
                 </div>
               ) : activeUrl ? (
@@ -230,7 +259,7 @@ export default function CoursePage() {
                 <p style={s.lessonMeta}>
                   {
                     course.sections.find((sec) =>
-                      sec.lessons.some((l) => l.id === activeLesson.id)
+                      sec.lessons.some((l) => l.id === activeLesson.id),
                     )?.title
                   }
                 </p>
@@ -244,7 +273,8 @@ export default function CoursePage() {
                   disabled={!prevLesson || prevLesson.status !== "ready"}
                   style={{
                     ...s.navBtn,
-                    opacity: !prevLesson || prevLesson.status !== "ready" ? 0.3 : 1,
+                    opacity:
+                      !prevLesson || prevLesson.status !== "ready" ? 0.3 : 1,
                   }}
                 >
                   ← Prev
@@ -257,7 +287,8 @@ export default function CoursePage() {
                   disabled={!nextLesson || nextLesson.status !== "ready"}
                   style={{
                     ...s.navBtn,
-                    opacity: !nextLesson || nextLesson.status !== "ready" ? 0.3 : 1,
+                    opacity:
+                      !nextLesson || nextLesson.status !== "ready" ? 0.3 : 1,
                   }}
                 >
                   Next →
@@ -278,7 +309,14 @@ export default function CoursePage() {
               {course.sections.map((section, si) => (
                 <div key={section.id}>
                   <div style={s.sectionLabel}>
-                    <span style={{ fontSize: "10px", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    <span
+                      style={{
+                        fontSize: "10px",
+                        color: "var(--text-muted)",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                      }}
+                    >
                       Section {si + 1}
                     </span>
                     <span style={s.sectionTitle}>{section.title}</span>
@@ -324,9 +362,7 @@ export default function CoursePage() {
                             {li + 1}. {lesson.title}
                           </span>
                           {!isReady && (
-                            <span style={s.processingTag}>
-                              {lesson.status}
-                            </span>
+                            <span style={s.processingTag}>{lesson.status}</span>
                           )}
                         </div>
                       </div>
@@ -343,39 +379,183 @@ export default function CoursePage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  layout: { minHeight: "100vh", background: "#0f0f0f", display: "flex", flexDirection: "column" },
-  topbar: { background: "#161616", borderBottom: "1px solid #2a2a2a", padding: "0 20px", height: "52px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, position: "sticky", top: 0, zIndex: 100 },
+  layout: {
+    minHeight: "100vh",
+    background: "#0f0f0f",
+    display: "flex",
+    flexDirection: "column",
+  },
+  topbar: {
+    background: "#161616",
+    borderBottom: "1px solid #2a2a2a",
+    padding: "0 20px",
+    height: "52px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexShrink: 0,
+    position: "sticky",
+    top: 0,
+    zIndex: 100,
+  },
   topLeft: { display: "flex", alignItems: "center", gap: "14px" },
-  backBtn: { padding: "5px 12px", background: "transparent", border: "1px solid #3f3f3f", borderRadius: "6px", color: "#aaa", fontSize: "12px", cursor: "pointer" },
+  backBtn: {
+    padding: "5px 12px",
+    background: "transparent",
+    border: "1px solid #3f3f3f",
+    borderRadius: "6px",
+    color: "#aaa",
+    fontSize: "12px",
+    cursor: "pointer",
+  },
   logo: { display: "flex", alignItems: "center", gap: "7px" },
-  logoIcon: { width: "24px", height: "24px", background: "var(--accent)", borderRadius: "5px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", color: "#fff" },
+  logoIcon: {
+    width: "24px",
+    height: "24px",
+    background: "var(--accent)",
+    borderRadius: "5px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "10px",
+    color: "#fff",
+  },
   logoText: { fontSize: "14px", fontWeight: 700, color: "#f1f1f1" },
   topSep: { color: "#3f3f3f", fontSize: "18px" },
-  courseTitle: { fontSize: "13px", color: "#aaa", maxWidth: "300px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  toggleBtn: { padding: "5px 14px", background: "transparent", border: "1px solid #3f3f3f", borderRadius: "6px", color: "#aaa", fontSize: "12px", cursor: "pointer" },
+  courseTitle: {
+    fontSize: "13px",
+    color: "#aaa",
+    maxWidth: "300px",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  toggleBtn: {
+    padding: "5px 14px",
+    background: "transparent",
+    border: "1px solid #3f3f3f",
+    borderRadius: "6px",
+    color: "#aaa",
+    fontSize: "12px",
+    cursor: "pointer",
+  },
   body: { display: "flex", flex: 1, overflow: "hidden" },
-  playerArea: { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" },
-  videoWrap: { flex: 1, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" },
-  processingBox: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#111", gap: "12px", minHeight: "400px" },
+  playerArea: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  },
+  videoWrap: {
+    flex: 1,
+    background: "#000",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  processingBox: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#111",
+    gap: "12px",
+    minHeight: "400px",
+  },
   processingIcon: { fontSize: "48px" },
   processingText: { fontSize: "16px", fontWeight: 600, color: "#aaa" },
-  processingSubText: { fontSize: "13px", color: "#717171", textAlign: "center", maxWidth: "320px" },
-  retryBtn: { padding: "8px 20px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: "6px", fontSize: "13px", cursor: "pointer", marginTop: "8px" },
-  infoBar: { background: "#161616", borderTop: "1px solid #2a2a2a", padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 },
+  processingSubText: {
+    fontSize: "13px",
+    color: "#717171",
+    textAlign: "center",
+    maxWidth: "320px",
+  },
+  retryBtn: {
+    padding: "8px 20px",
+    background: "var(--accent)",
+    color: "#fff",
+    border: "none",
+    borderRadius: "6px",
+    fontSize: "13px",
+    cursor: "pointer",
+    marginTop: "8px",
+  },
+  infoBar: {
+    background: "#161616",
+    borderTop: "1px solid #2a2a2a",
+    padding: "14px 20px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexShrink: 0,
+  },
   lessonTitle: { fontSize: "15px", fontWeight: 600, color: "#f1f1f1" },
   lessonMeta: { fontSize: "12px", color: "#717171", marginTop: "2px" },
   navBtns: { display: "flex", gap: "8px" },
-  navBtn: { padding: "7px 16px", background: "#212121", border: "1px solid #3f3f3f", borderRadius: "6px", color: "#aaa", fontSize: "13px", cursor: "pointer" },
-  sidebar: { width: "320px", background: "#161616", borderLeft: "1px solid #2a2a2a", display: "flex", flexDirection: "column", flexShrink: 0 },
-  sidebarHead: { padding: "16px", borderBottom: "1px solid #2a2a2a", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 },
+  navBtn: {
+    padding: "7px 16px",
+    background: "#212121",
+    border: "1px solid #3f3f3f",
+    borderRadius: "6px",
+    color: "#aaa",
+    fontSize: "13px",
+    cursor: "pointer",
+  },
+  sidebar: {
+    width: "320px",
+    background: "#161616",
+    borderLeft: "1px solid #2a2a2a",
+    display: "flex",
+    flexDirection: "column",
+    flexShrink: 0,
+  },
+  sidebarHead: {
+    padding: "16px",
+    borderBottom: "1px solid #2a2a2a",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexShrink: 0,
+  },
   sidebarTitle: { fontSize: "14px", fontWeight: 600, color: "#f1f1f1" },
-  lessonCount: { fontSize: "12px", color: "#717171", background: "#212121", padding: "2px 8px", borderRadius: "10px" },
+  lessonCount: {
+    fontSize: "12px",
+    color: "#717171",
+    background: "#212121",
+    padding: "2px 8px",
+    borderRadius: "10px",
+  },
   playlist: { overflowY: "auto", flex: 1 },
-  sectionLabel: { padding: "12px 16px 6px", display: "flex", flexDirection: "column", gap: "2px", background: "#111" },
+  sectionLabel: {
+    padding: "12px 16px 6px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "2px",
+    background: "#111",
+  },
   sectionTitle: { fontSize: "13px", fontWeight: 600, color: "#aaa" },
-  lessonItem: { display: "flex", alignItems: "flex-start", gap: "10px", padding: "10px 14px", transition: "background 0.15s" },
+  lessonItem: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: "10px",
+    padding: "10px 14px",
+    transition: "background 0.15s",
+  },
   lessonItemIcon: { fontSize: "11px", marginTop: "2px", flexShrink: 0 },
-  lessonItemContent: { display: "flex", flexDirection: "column", gap: "4px", flex: 1 },
+  lessonItemContent: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+    flex: 1,
+  },
   lessonItemTitle: { fontSize: "13px", lineHeight: 1.4 },
-  processingTag: { fontSize: "10px", color: "var(--warning)", background: "var(--warning-soft)", padding: "2px 6px", borderRadius: "8px", width: "fit-content" },
+  processingTag: {
+    fontSize: "10px",
+    color: "var(--warning)",
+    background: "var(--warning-soft)",
+    padding: "2px 6px",
+    borderRadius: "8px",
+    width: "fit-content",
+  },
 };

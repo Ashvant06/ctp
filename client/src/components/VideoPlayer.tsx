@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import Hls from "hls.js";
 
+
 interface VideoPlayerProps {
   hlsUrl: string;
 }
