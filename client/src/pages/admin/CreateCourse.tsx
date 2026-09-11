@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase, videoBucket } from "../../lib/supabase";
+import { API_URL } from "../../lib/api";
 
 interface Lesson {
   title: string;
@@ -71,7 +72,7 @@ export default function CreateCourse() {
       if (!token) { setError("Not authenticated."); setSaving(false); return; }
 
       // 1. Create course
-      const courseRes = await fetch("http://localhost:8080/admin/courses", {
+      const courseRes = await fetch(`${API_URL}/admin/courses`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ title: courseTitle, description: courseDescription }),
@@ -84,7 +85,7 @@ export default function CreateCourse() {
       for (let si = 0; si < sections.length; si++) {
         const section = sections[si];
 
-        const sectionRes = await fetch("http://localhost:8080/admin/sections", {
+        const sectionRes = await fetch(`${API_URL}/admin/sections`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ course_id: courseId, title: section.title, order_index: si }),
@@ -96,10 +97,10 @@ export default function CreateCourse() {
         for (let li = 0; li < section.lessons.length; li++) {
           const lesson = section.lessons[li];
 
-          // Step A: Get signed upload URL from Go
           updateLesson(si, li, { status: "uploading", progress: 0 });
 
-          const urlRes = await fetch("http://localhost:8080/admin/videos/upload-url", {
+          // Step A: Get signed upload URL from Go
+          const urlRes = await fetch(`${API_URL}/admin/videos/upload-url`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify({
@@ -126,8 +127,8 @@ export default function CreateCourse() {
 
           updateLesson(si, li, { status: "confirming", progress: 100 });
 
-          // Step C: Confirm upload to Go → updates lesson status to "ready"
-          const confirmRes = await fetch("http://localhost:8080/admin/videos/confirm", {
+          // Step C: Confirm upload to Go
+          const confirmRes = await fetch(`${API_URL}/admin/videos/confirm`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify({ lesson_id, video_path: path }),
