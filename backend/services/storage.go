@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 )
@@ -81,31 +80,22 @@ func CreateSignedUploadURL(path string) (*SignedUploadResponse, error) {
 func CreateSignedDownloadURL(path string, expiresIn int) (string, error) {
 	supabaseURL := os.Getenv("SUPABASE_URL")
 	serviceRoleKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
-	if supabaseURL == "" {
-		return "", fmt.Errorf("SUPABASE_URL is not set")
-	}
-	if serviceRoleKey == "" {
-		return "", fmt.Errorf("SUPABASE_SERVICE_ROLE_KEY is not set")
-	}
-	if path == "" {
-		return "", fmt.Errorf("storage path is empty")
-	}
 
 	endpoint := fmt.Sprintf(
-		"%s/storage/v1/object/sign/%s/%s",
+		"%s/storage/v1/object/sign/CTP-Courses/%s",
 		supabaseURL,
-		videoBucket(),
 		path,
 	)
-	body, err := json.Marshal(map[string]interface{}{"expiresIn": expiresIn})
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal request: %w", err)
-	}
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"expiresIn": expiresIn,
+	})
 
 	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(body))
 	if err != nil {
 		return "", err
 	}
+
 	req.Header.Set("Authorization", "Bearer "+serviceRoleKey)
 	req.Header.Set("apikey", serviceRoleKey)
 	req.Header.Set("Content-Type", "application/json")
@@ -115,28 +105,22 @@ func CreateSignedDownloadURL(path string, expiresIn int) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("Supabase Storage returned status %d", resp.StatusCode)
-	}
 
-	var result SignedDownloadResponse
+	var result struct {
+		SignedURL string `json:"signedURL"`
+	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", err
 	}
+
 	if result.SignedURL == "" {
-		return "", fmt.Errorf("Supabase Storage returned an empty signed URL")
+		return "", fmt.Errorf("empty signed URL returned from Supabase")
 	}
 
-	parsedURL, err := url.Parse(result.SignedURL)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse signed URL: %w", err)
-	}
-	if !parsedURL.IsAbs() {
-		baseURL, err := url.Parse(strings.TrimRight(supabaseURL, "/") + "/storage/v1/")
-		if err != nil {
-			return "", fmt.Errorf("failed to parse Supabase URL: %w", err)
-		}
-		result.SignedURL = baseURL.ResolveReference(parsedURL).String()
+	// Supabase returns a relative path like /storage/v1/object/sign/...
+	// We need to prepend the base URL only if it's a relative path
+	if len(result.SignedURL) > 0 && result.SignedURL[0] == '/' {
+		return supabaseURL + result.SignedURL, nil
 	}
 
 	return result.SignedURL, nil
