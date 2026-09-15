@@ -157,3 +157,34 @@ func VideoObjectExists(path string) (bool, error) {
 	}
 	return true, nil
 }
+
+func DeleteStorageFile(path string) error {
+	supabaseURL := os.Getenv("SUPABASE_URL")
+	serviceRoleKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+	endpoint := fmt.Sprintf(
+		"%s/storage/v1/object/CTP-Courses/%s",
+		supabaseURL,
+		path,
+	)
+
+	req, err := http.NewRequest(http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+serviceRoleKey)
+	req.Header.Set("apikey", serviceRoleKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to delete from storage: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("storage delete returned status %d", resp.StatusCode)
+	}
+
+	return nil
+}

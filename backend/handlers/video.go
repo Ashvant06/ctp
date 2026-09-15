@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -235,5 +236,73 @@ func GetVideoPlayURLHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"url": signedURL,
+	})
+}
+
+func DeleteVideoHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	lessonID := r.URL.Query().Get("lesson_id")
+	if lessonID == "" {
+		http.Error(w, "lesson_id is required", http.StatusBadRequest)
+		return
+	}
+
+	supabaseURL := os.Getenv("SUPABASE_URL")
+	serviceKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+	// 1. Fetch lesson to get video_path
+	url := fmt.Sprintf("%s/rest/v1/lessons?id=eq.%s&select=video_path", supabaseURL, lessonID)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("apikey", serviceKey)
+	req.Header.Set("Authorization", "Bearer "+serviceKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		http.Error(w, "Failed to fetch lesson", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	var lessons []struct {
+		VideoPath string `json:"video_path"`
+	}
+	json.NewDecoder(resp.Body).Decode(&lessons)
+
+	if len(lessons) == 0 {
+		http.Error(w, "Lesson not found", http.StatusNotFound)
+		return
+	}
+
+	videoPath := lessons[0].VideoPath
+
+	// 2. Delete file from Supabase Storage
+	if videoPath != "" {
+		if err := services.DeleteStorageFile(videoPath); err != nil {
+			log.Printf("Failed to delete storage file: %v", err)
+			// Continue anyway to clean up DB
+		}
+	}
+
+	// 3. Delete lesson from DB
+	delURL := fmt.Sprintf("%s/rest/v1/lessons?id=eq.%s", supabaseURL, lessonID)
+	delReq, _ := http.NewRequest("DELETE", delURL, nil)
+	delReq.Header.Set("apikey", serviceKey)
+	delReq.Header.Set("Authorization", "Bearer "+serviceKey)
+
+	delResp, err := http.DefaultClient.Do(delReq)
+	if err != nil {
+		http.Error(w, "Failed to delete lesson", http.StatusInternalServerError)
+		return
+	}
+	defer delResp.Body.Close()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message":   "Lesson deleted successfully",
+		"lesson_id": lessonID,
 	})
 }
