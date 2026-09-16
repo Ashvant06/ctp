@@ -66,6 +66,7 @@ func main() {
 	http.HandleFunc("/courses", corsMiddleware(handlers.GetCoursesHandler))
 	http.HandleFunc("/courses/", corsMiddleware(handlers.GetCourseHandler))
 	http.HandleFunc("/admin/lessons/delete", corsMiddleware(middleware.Auth(middleware.AdminOnly(handlers.DeleteVideoHandler))))
+	http.HandleFunc("/auth/sync", corsMiddleware(middleware.Auth(handlers.SyncProfileHandler)))
 
 	fmt.Println("Server running on http://localhost:8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {

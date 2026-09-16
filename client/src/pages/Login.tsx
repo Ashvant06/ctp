@@ -22,17 +22,26 @@ export default function Login() {
   };
 
   const handleGoogleLogin = async () => {
-    setError("");
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: `${window.location.origin}/dashboard` },
-      });
-      if (error) setError(error.message);
-    } catch { setError("Google login failed."); }
-    finally { setLoading(false); }
-  };
+  setError("");
+  setLoading(true);
+  try {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/dashboard`,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
+    });
+    if (error) setError(error.message);
+  } catch {
+    setError("Google login failed.");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div style={s.page}>
