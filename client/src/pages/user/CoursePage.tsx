@@ -170,7 +170,7 @@ export default function CoursePage() {
           </button>
           <div style={s.logo}>
             <span style={s.logoIcon}>▶</span>
-            <span style={s.logoText}>LearnHub</span>
+            <span style={s.logoText}>CTP Learner</span>
           </div>
           <span style={s.topSep}>|</span>
           <span style={s.courseTitle}>{course.title}</span>
