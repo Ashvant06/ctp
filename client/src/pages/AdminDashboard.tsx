@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import { API_URL } from "../lib/api";
+import "./AdminDashboard.css";
 
 type NavItem = "overview" | "courses" | "playlists" | "users";
 
@@ -20,10 +21,10 @@ export default function AdminDashboard() {
   ] as const;
 
   return (
-    <div style={s.layout}>
+    <div className="admin-dashboard" style={s.layout}>
       {/* Sidebar */}
-      <aside style={{ ...s.sidebar, width: collapsed ? "64px" : "220px" }}>
-        <div style={s.sidebarHeader}>
+      <aside className="admin-sidebar" style={{ ...s.sidebar, width: collapsed ? "64px" : "220px" }}>
+        <div className="admin-sidebar-header" style={s.sidebarHeader}>
           {!collapsed && (
             <div style={s.logo}>
               <span style={s.logoIcon}>▶</span>
@@ -38,7 +39,7 @@ export default function AdminDashboard() {
           </button>
         </div>
 
-        <nav style={s.nav}>
+        <nav className="admin-nav" style={s.nav}>
           {navItems.map((item) => (
             <button
               key={item.id}
@@ -63,7 +64,7 @@ export default function AdminDashboard() {
           ))}
         </nav>
 
-        <div style={s.sidebarFooter}>
+        <div className="admin-sidebar-footer" style={s.sidebarFooter}>
           <div style={s.userInfo}>
             <div style={s.avatar}>
               {user?.user_metadata?.full_name?.[0]?.toUpperCase() ?? "A"}
@@ -77,16 +78,13 @@ export default function AdminDashboard() {
               </div>
             )}
           </div>
-          <button onClick={logout} style={s.logoutBtn} title="Logout">
-            ⎋
-          </button>
         </div>
       </aside>
 
       {/* Main */}
-      <main style={s.main}>
-        <div style={s.topbar}>
-          <div>
+      <main className="admin-main" style={s.main}>
+        <div className="admin-topbar" style={s.topbar}>
+          <div style={s.pageHeading}>
             <h1 style={s.pageTitle}>
               {navItems.find((n) => n.id === activeNav)?.label}
             </h1>
@@ -98,10 +96,21 @@ export default function AdminDashboard() {
               {activeNav === "users" && "Manage registered users"}
             </p>
           </div>
-          <span style={s.adminBadge}>Admin</span>
+          <div style={s.topbarActions}>
+            <span style={s.adminBadge}>Admin</span>
+            <button
+              onClick={logout}
+              style={s.logoutBtn}
+              title="Log out"
+              aria-label="Log out"
+            >
+              <span aria-hidden="true">⎋</span>
+              <span>Log out</span>
+            </button>
+          </div>
         </div>
 
-        <div style={s.content}>
+        <div className="admin-content" style={s.content}>
           {activeNav === "overview" && <Overview navigate={navigate} />}
           {activeNav === "courses" && <Courses navigate={navigate} />}
           {activeNav === "playlists" && <Playlists navigate={navigate} />}
@@ -116,6 +125,7 @@ interface DashboardData {
   course_count: number;
   lesson_count: number;
   user_count: number;
+  watch_seconds: number | null;
   recent_courses: { id: string; title: string; created_at: string }[];
 }
 
@@ -156,12 +166,19 @@ function Overview({ navigate }: { navigate: (path: string) => void }) {
     { label: "Total Courses", value: dashboard?.course_count ?? "—", icon: "▶", color: "#a435f0" },
     { label: "Total Users", value: dashboard?.user_count ?? "—", icon: "◎", color: "#00b894" },
     { label: "Total Lessons", value: dashboard?.lesson_count ?? "—", icon: "⊞", color: "#f39c12" },
-    { label: "Hours Watched", value: "—", icon: "◷", color: "#e55039" },
+    {
+      label: "Hours Watched",
+      value: dashboard?.watch_seconds == null
+        ? "—"
+        : (dashboard.watch_seconds / 3600).toFixed(1),
+      icon: "◷",
+      color: "#e55039",
+    },
   ];
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
-      <div style={os.grid}>
+      <div className="dashboard-stats" style={os.grid}>
         {stats.map((s) => (
           <div key={s.label} style={os.card}>
             <div
@@ -174,7 +191,7 @@ function Overview({ navigate }: { navigate: (path: string) => void }) {
           </div>
         ))}
       </div>
-      <div style={os.section}>
+      <div className="dashboard-section" style={os.section}>
         <div style={os.sectionHeader}>
           <h2 style={os.sectionTitle}>Recently added courses</h2>
           <button onClick={() => navigate("/admin/courses")} style={os.secondaryBtn}>Manage courses</button>
@@ -390,10 +407,17 @@ const s: Record<string, React.CSSProperties> = {
   },
   userRole: { fontSize: "11px", color: "var(--accent)" },
   logoutBtn: {
-    background: "transparent",
-    color: "var(--text-muted)",
-    fontSize: "18px",
-    padding: "4px",
+    background: "var(--bg-primary)",
+    color: "var(--text-primary)",
+    fontSize: "13px",
+    fontWeight: 600,
+    padding: "8px 12px",
+    border: "1px solid var(--border-light)",
+    borderRadius: "var(--radius-sm)",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "6px",
     flexShrink: 0,
   },
   main: {
@@ -409,6 +433,16 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: "16px",
+    flexWrap: "wrap",
+  },
+  pageHeading: { flex: "1 1 180px", minWidth: 0 },
+  topbarActions: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: "10px",
+    flex: "0 0 auto",
   },
   pageTitle: {
     fontSize: "20px",

@@ -139,7 +139,7 @@ export default function PlaylistPage() {
                 </div>
               ) : activeUrl ? (
                 <div style={s.videoWrap}>
-                  <VideoPlayer hlsUrl={activeUrl} />
+                  <VideoPlayer hlsUrl={activeUrl} lessonId={activeVideo.id} />
                 </div>
               ) : (
                 <div style={s.stateBox}>

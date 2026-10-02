@@ -156,8 +156,8 @@ export default function CreateCourse() {
   };
 
   return (
-    <div style={s.page}>
-      <div style={s.header}>
+    <div className="admin-page" style={s.page}>
+      <div className="admin-page-header" style={s.header}>
         <button onClick={() => navigate("/admin")} style={s.backBtn}>← Back</button>
         <div>
           <h1 style={s.title}>Create new course</h1>

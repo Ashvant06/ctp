@@ -126,8 +126,8 @@ export default function CreatePlaylist() {
   };
 
   return (
-    <div style={s.page}>
-      <div style={s.header}>
+    <div className="admin-page" style={s.page}>
+      <div className="admin-page-header" style={s.header}>
         <button onClick={() => navigate("/admin/playlists")} style={s.backBtn}>← Back</button>
         <div>
           <h1 style={s.title}>Create new playlist</h1>
