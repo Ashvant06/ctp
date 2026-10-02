@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase, videoBucket } from "../../lib/supabase";
 import { API_URL } from "../../lib/api";
@@ -17,6 +17,8 @@ interface NewVideo {
   status: "idle" | "uploading" | "confirming" | "ready" | "error";
 }
 
+const errorMessage = (err: unknown) => err instanceof Error ? err.message : String(err);
+
 export default function EditPlaylist() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -29,26 +31,56 @@ export default function EditPlaylist() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    fetchPlaylist();
-  }, [id]);
-
-  const fetchPlaylist = async () => {
-    const { data } = await supabase
+  const fetchPlaylist = useCallback(async () => {
+    const { data, error } = await supabase
       .from("courses")
       .select("*, lessons(*)")
       .eq("id", id!)
       .single();
 
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+      return;
+    }
+
     if (data) {
       setPlaylistTitle(data.title);
       setPlaylistDescription(data.description ?? "");
       setVideos(
-        (data.lessons as Video[]).sort((a, b) => a.order_index - b.order_index)
+        ((data.lessons ?? []) as Video[]).sort((a, b) => a.order_index - b.order_index)
       );
     }
     setLoading(false);
-  };
+  }, [id]);
+
+  useEffect(() => {
+    let active = true;
+    const loadPlaylist = async () => {
+      const { data, error } = await supabase
+        .from("courses")
+        .select("*, lessons(*)")
+        .eq("id", id!)
+        .single();
+      if (!active) return;
+
+      if (error) {
+        setError(error.message);
+      } else if (data) {
+        setPlaylistTitle(data.title);
+        setPlaylistDescription(data.description ?? "");
+        setVideos(
+          ((data.lessons ?? []) as Video[]).sort((a, b) => a.order_index - b.order_index)
+        );
+      }
+      setLoading(false);
+    };
+
+    void loadPlaylist();
+    return () => {
+      active = false;
+    };
+  }, [id]);
 
   const addNewVideo = () => {
     setNewVideos([...newVideos, { title: "", file: null, status: "idle" }]);
@@ -80,14 +112,15 @@ export default function EditPlaylist() {
 
       if (!res.ok) throw new Error(await res.text());
       setVideos(prev => prev.filter(v => v.id !== videoId));
-    } catch (err: any) {
-      alert(`Failed to delete: ${err.message}`);
+    } catch (err: unknown) {
+      alert(`Failed to delete: ${errorMessage(err)}`);
     } finally {
       setDeleting(null);
     }
   };
 
   const handleSaveInfo = async () => {
+    setError("");
     const { error } = await supabase
       .from("courses")
       .update({ title: playlistTitle, description: playlistDescription })
@@ -111,10 +144,14 @@ export default function EditPlaylist() {
       const token = session?.access_token;
       if (!token) { setError("Not authenticated."); return; }
 
-      const startIndex = videos.length;
+      let nextOrderIndex = videos.reduce(
+        (nextIndex, video) => Math.max(nextIndex, video.order_index + 1),
+        0
+      );
 
       for (let i = 0; i < newVideos.length; i++) {
         const video = newVideos[i];
+        if (video.status === "ready") continue;
         updateNewVideo(i, { status: "uploading" });
 
         const urlRes = await fetch(`${API_URL}/admin/videos/upload-url`, {
@@ -124,7 +161,7 @@ export default function EditPlaylist() {
             course_id: id,
             section_id: null,
             title: video.title,
-            order_index: startIndex + i,
+            order_index: nextOrderIndex,
           }),
         });
         if (!urlRes.ok) throw new Error(await urlRes.text());
@@ -149,13 +186,15 @@ export default function EditPlaylist() {
         if (!confirmRes.ok) throw new Error(await confirmRes.text());
 
         updateNewVideo(i, { status: "ready" });
+        nextOrderIndex += 1;
       }
 
       // Refresh video list
       await fetchPlaylist();
       setNewVideos([]);
-    } catch (err: any) {
-      setError(err.message || "Something went wrong");
+    } catch (err: unknown) {
+      await fetchPlaylist();
+      setError(errorMessage(err) || "Something went wrong");
     } finally {
       setSaving(false);
     }
@@ -190,16 +229,16 @@ export default function EditPlaylist() {
         <div style={s.card}>
           <h2 style={s.cardTitle}>Playlist information</h2>
           <label style={s.label}>Title</label>
-          <input style={s.input} value={playlistTitle}
+          <input style={s.input} value={playlistTitle} disabled={saving}
             onChange={e => setPlaylistTitle(e.target.value)}
             onFocus={e => e.target.style.borderColor = "var(--accent)"}
             onBlur={e => e.target.style.borderColor = "var(--border)"} />
           <label style={s.label}>Description</label>
-          <textarea style={s.textarea} value={playlistDescription}
+          <textarea style={s.textarea} value={playlistDescription} disabled={saving}
             onChange={e => setPlaylistDescription(e.target.value)} rows={3}
-            onFocus={(e: any) => e.target.style.borderColor = "var(--accent)"}
-            onBlur={(e: any) => e.target.style.borderColor = "var(--border)"} />
-          <button onClick={handleSaveInfo} style={s.saveInfoBtn}>Save info</button>
+            onFocus={e => e.target.style.borderColor = "var(--accent)"}
+            onBlur={e => e.target.style.borderColor = "var(--border)"} />
+          <button onClick={handleSaveInfo} disabled={saving} style={s.saveInfoBtn}>Save info</button>
         </div>
 
         {/* Existing videos */}
@@ -227,7 +266,7 @@ export default function EditPlaylist() {
                 </div>
                 <button
                   onClick={() => handleDeleteVideo(video.id)}
-                  disabled={deleting === video.id}
+                  disabled={saving || deleting === video.id}
                   style={s.deleteBtn}
                 >
                   {deleting === video.id ? "..." : "🗑 Delete"}
@@ -249,17 +288,18 @@ export default function EditPlaylist() {
                   <span style={s.videoNum}>New video {i + 1}</span>
                   <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                     <span style={{ ...s.badge, color: st.color, background: st.bg }}>{st.label}</span>
-                    <button onClick={() => removeNewVideo(i)} style={s.removeBtn}>✕</button>
+                    <button onClick={() => removeNewVideo(i)} disabled={saving} style={s.removeBtn}>✕</button>
                   </div>
                 </div>
                 <label style={s.label}>Title *</label>
                 <input style={s.input} placeholder="Video title"
-                  value={video.title} onChange={e => updateNewVideo(i, { title: e.target.value })}
+                  value={video.title} disabled={saving} onChange={e => updateNewVideo(i, { title: e.target.value })}
                   onFocus={e => e.target.style.borderColor = "var(--accent)"}
                   onBlur={e => e.target.style.borderColor = "var(--border)"} />
                 <label style={s.label}>Video file *</label>
                 <label style={s.fileLabel}>
                   <input type="file" accept="video/mp4,video/*" style={{ display: "none" }}
+                    disabled={saving}
                     onChange={e => { if (e.target.files?.[0]) updateNewVideo(i, { file: e.target.files[0] }); }} />
                   <span style={s.fileBtn}>Choose file</span>
                   <span style={s.fileName}>{video.file ? video.file.name : "No file chosen"}</span>
@@ -268,7 +308,7 @@ export default function EditPlaylist() {
             );
           })}
 
-          <button onClick={addNewVideo} style={s.addVideoBtn}>+ Add video</button>
+          <button onClick={addNewVideo} disabled={saving} style={s.addVideoBtn}>+ Add video</button>
 
           {newVideos.length > 0 && (
             <button onClick={handleUploadNewVideos} disabled={saving} style={{ ...s.submitBtn, marginTop: "16px" }}>
