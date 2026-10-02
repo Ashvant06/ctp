@@ -18,13 +18,18 @@ type watchTimeRequest struct {
 }
 
 func RecordWatchTimeHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 	claims, ok := r.Context().Value(middleware.UserClaimsKey).(map[string]string)
 	if !ok || claims["sub"] == "" {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		getUserWatchTime(w, claims["sub"])
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -74,4 +79,44 @@ func RecordWatchTimeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func getUserWatchTime(w http.ResponseWriter, userID string) {
+	body, err := json.Marshal(map[string]string{"p_user_id": userID})
+	if err != nil {
+		http.Error(w, "Failed to encode watch-time request", http.StatusInternalServerError)
+		return
+	}
+
+	supabaseURL := os.Getenv("SUPABASE_URL")
+	serviceKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
+	req, err := http.NewRequest(http.MethodPost, supabaseURL+"/rest/v1/rpc/user_watch_seconds", bytes.NewReader(body))
+	if err != nil {
+		http.Error(w, "Failed to build watch-time request", http.StatusInternalServerError)
+		return
+	}
+	req.Header.Set("apikey", serviceKey)
+	req.Header.Set("Authorization", "Bearer "+serviceKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		http.Error(w, "Failed to load watch time", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		http.Error(w, fmt.Sprintf("Failed to load watch time (database returned %d)", resp.StatusCode), http.StatusBadGateway)
+		return
+	}
+
+	var seconds int64
+	if err := json.NewDecoder(resp.Body).Decode(&seconds); err != nil {
+		http.Error(w, "Failed to read watch-time response", http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]int64{"watch_seconds": seconds}); err != nil {
+		http.Error(w, "Failed to encode watch-time response", http.StatusInternalServerError)
+	}
 }
