@@ -215,8 +215,8 @@ export default function EditPlaylist() {
   );
 
   return (
-    <div style={s.page}>
-      <div style={s.header}>
+    <div className="admin-page" style={s.page}>
+      <div className="admin-page-header" style={s.header}>
         <button onClick={() => navigate("/admin/playlists")} style={s.backBtn}>← Back</button>
         <div>
           <h1 style={s.title}>Edit playlist</h1>
@@ -252,8 +252,8 @@ export default function EditPlaylist() {
             <div style={s.emptyVideos}>No videos yet. Add some below.</div>
           ) : (
             videos.map((video, i) => (
-              <div key={video.id} style={s.videoRow}>
-                <div style={s.videoLeft}>
+              <div key={video.id} className="admin-video-row" style={s.videoRow}>
+                <div className="admin-video-left" style={s.videoLeft}>
                   <span style={s.videoNum}>{i + 1}</span>
                   <span style={s.videoTitle}>{video.title}</span>
                   <span style={{

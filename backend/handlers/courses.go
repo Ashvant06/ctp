@@ -38,6 +38,7 @@ type AdminDashboardStats struct {
 	CourseCount   int               `json:"course_count"`
 	LessonCount   int               `json:"lesson_count"`
 	UserCount     int               `json:"user_count"`
+	WatchSeconds  *int64            `json:"watch_seconds"`
 	RecentCourses []DashboardCourse `json:"recent_courses"`
 }
 
@@ -72,16 +73,47 @@ func AdminDashboardHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to load dashboard statistics", http.StatusBadGateway)
 		return
 	}
+	watchSeconds, err := getTotalWatchSeconds()
+	if err != nil {
+		log.Printf("Failed to load total watch time: %v", err)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(AdminDashboardStats{
 		CourseCount:   courseCount,
 		LessonCount:   lessonCount,
 		UserCount:     userCount,
+		WatchSeconds:  watchSeconds,
 		RecentCourses: recentCourses,
 	}); err != nil {
 		log.Printf("Failed to encode dashboard statistics: %v", err)
 	}
+}
+
+func getTotalWatchSeconds() (*int64, error) {
+	supabaseURL := os.Getenv("SUPABASE_URL")
+	serviceKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
+	req, err := http.NewRequest(http.MethodPost, supabaseURL+"/rest/v1/rpc/total_watch_seconds", strings.NewReader("{}"))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("apikey", serviceKey)
+	req.Header.Set("Authorization", "Bearer "+serviceKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("watch-time aggregation returned status %d", resp.StatusCode)
+	}
+	var seconds int64
+	if err := json.NewDecoder(resp.Body).Decode(&seconds); err != nil {
+		return nil, err
+	}
+	return &seconds, nil
 }
 
 func getTableCount(table string) (int, error) {
