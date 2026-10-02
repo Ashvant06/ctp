@@ -77,16 +77,13 @@ export default function AdminDashboard() {
               </div>
             )}
           </div>
-          <button onClick={logout} style={s.logoutBtn} title="Logout">
-            ⎋
-          </button>
         </div>
       </aside>
 
       {/* Main */}
       <main style={s.main}>
         <div style={s.topbar}>
-          <div>
+          <div style={s.pageHeading}>
             <h1 style={s.pageTitle}>
               {navItems.find((n) => n.id === activeNav)?.label}
             </h1>
@@ -98,7 +95,18 @@ export default function AdminDashboard() {
               {activeNav === "users" && "Manage registered users"}
             </p>
           </div>
-          <span style={s.adminBadge}>Admin</span>
+          <div style={s.topbarActions}>
+            <span style={s.adminBadge}>Admin</span>
+            <button
+              onClick={logout}
+              style={s.logoutBtn}
+              title="Log out"
+              aria-label="Log out"
+            >
+              <span aria-hidden="true">⎋</span>
+              <span>Log out</span>
+            </button>
+          </div>
         </div>
 
         <div style={s.content}>
@@ -390,10 +398,17 @@ const s: Record<string, React.CSSProperties> = {
   },
   userRole: { fontSize: "11px", color: "var(--accent)" },
   logoutBtn: {
-    background: "transparent",
-    color: "var(--text-muted)",
-    fontSize: "18px",
-    padding: "4px",
+    background: "var(--bg-primary)",
+    color: "var(--text-primary)",
+    fontSize: "13px",
+    fontWeight: 600,
+    padding: "8px 12px",
+    border: "1px solid var(--border-light)",
+    borderRadius: "var(--radius-sm)",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "6px",
     flexShrink: 0,
   },
   main: {
@@ -409,6 +424,16 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: "16px",
+    flexWrap: "wrap",
+  },
+  pageHeading: { flex: "1 1 180px", minWidth: 0 },
+  topbarActions: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: "10px",
+    flex: "0 0 auto",
   },
   pageTitle: {
     fontSize: "20px",
