@@ -58,8 +58,8 @@ export default function ManagePlaylists() {
   };
 
   return (
-    <div style={s.page}>
-      <div style={s.header}>
+    <div className="admin-page" style={s.page}>
+      <div className="admin-page-header" style={s.header}>
         <button onClick={() => navigate("/admin")} style={s.backBtn}>← Back</button>
         <div style={{ flex: 1 }}>
           <h1 style={s.title}>Manage playlists</h1>
@@ -84,11 +84,11 @@ export default function ManagePlaylists() {
         <div style={s.list}>
           {playlists.map(playlist => (
             <div key={playlist.id} style={s.card}>
-              <div style={s.cardThumb}>
+              <div className="admin-playlist-thumb" style={s.cardThumb}>
                 <span style={s.thumbIcon}>▶</span>
               </div>
-              <div style={s.cardBody}>
-                <div style={s.cardTop}>
+              <div className="admin-playlist-body" style={s.cardBody}>
+                <div className="admin-playlist-top" style={s.cardTop}>
                   <div>
                     <h2 style={s.cardTitle}>{playlist.title}</h2>
                     <div style={s.cardMeta}>

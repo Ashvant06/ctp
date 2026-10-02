@@ -201,7 +201,7 @@ export default function CoursePage() {
                 </div>
               ) : activeUrl ? (
                 <div style={s.videoWrap}>
-                  <VideoPlayer hlsUrl={activeUrl} />
+                  <VideoPlayer hlsUrl={activeUrl} lessonId={activeLesson.id} />
                 </div>
               ) : (
                 <div style={s.processingBox}>

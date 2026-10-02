@@ -135,8 +135,8 @@ export default function ManageCourses() {
   };
 
   return (
-    <div style={s.page}>
-      <div style={s.header}>
+    <div className="admin-page" style={s.page}>
+      <div className="admin-page-header" style={s.header}>
         <button onClick={() => navigate("/admin")} style={s.backBtn}>← Back</button>
         <div style={{ flex: 1 }}>
           <h1 style={s.title}>Manage courses</h1>
@@ -170,7 +170,7 @@ export default function ManageCourses() {
           {courses.map(course => (
             <div key={course.id} style={s.courseCard}>
               {/* Course header */}
-              <div style={s.courseHeader}>
+              <div className="admin-course-header" style={s.courseHeader}>
                 <div style={s.courseInfo}>
                   <h2 style={s.courseName}>{course.title}</h2>
                   <p style={s.courseMeta}>
@@ -179,7 +179,7 @@ export default function ManageCourses() {
                     {new Date(course.created_at).toLocaleDateString()}
                   </p>
                 </div>
-                <div style={s.courseActions}>
+                <div className="admin-course-actions" style={s.courseActions}>
                   <button
                     onClick={() => setExpandedCourse(expandedCourse === course.id ? null : course.id)}
                     style={s.expandBtn}
@@ -213,8 +213,8 @@ export default function ManageCourses() {
                         {unsectionedLessons
                           .sort((a, b) => a.order_index - b.order_index)
                           .map((lesson, li) => (
-                            <div key={lesson.id} style={s.lessonRow}>
-                              <div style={s.lessonLeft}>
+                            <div key={lesson.id} className="admin-lesson-row" style={s.lessonRow}>
+                              <div className="admin-lesson-left" style={s.lessonLeft}>
                                 <span style={s.lessonNum}>{li + 1}.</span>
                                 <span style={s.lessonName}>{lesson.title}</span>
                                 <span style={{
@@ -247,8 +247,8 @@ export default function ManageCourses() {
                         {section.lessons
                           .sort((a, b) => a.order_index - b.order_index)
                           .map((lesson, li) => (
-                            <div key={lesson.id} style={s.lessonRow}>
-                              <div style={s.lessonLeft}>
+                            <div key={lesson.id} className="admin-lesson-row" style={s.lessonRow}>
+                              <div className="admin-lesson-left" style={s.lessonLeft}>
                                 <span style={s.lessonNum}>{li + 1}.</span>
                                 <span style={s.lessonName}>{lesson.title}</span>
                                 <span style={{

@@ -1,0 +1,215 @@
+.admin-dashboard {
+  width: 100%;
+  min-width: 0;
+}
+
+.admin-sidebar {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.admin-main,
+.admin-content {
+  min-width: 0;
+}
+
+.dashboard-stats {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)) !important;
+}
+
+.dashboard-section {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.admin-page {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+@media (min-width: 1600px) {
+  .admin-content {
+    padding-inline: clamp(28px, 3vw, 64px) !important;
+  }
+
+  .dashboard-stats {
+    gap: clamp(16px, 1.5vw, 28px) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .admin-dashboard {
+    flex-direction: column !important;
+  }
+
+  .admin-sidebar {
+    width: 100% !important;
+    min-height: 0;
+    height: auto;
+    overflow: visible !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .admin-sidebar-header {
+    min-height: 56px;
+    padding: 10px 16px !important;
+    justify-content: space-between;
+  }
+
+  .admin-sidebar-header > button {
+    display: none;
+  }
+
+  .admin-nav {
+    flex-direction: row !important;
+    overflow-x: auto;
+    padding: 0 8px 8px !important;
+    gap: 4px;
+    scrollbar-width: thin;
+  }
+
+  .admin-nav > button {
+    flex: 0 0 auto;
+    min-height: 42px;
+    padding: 10px 14px !important;
+    white-space: nowrap;
+    border-left: 0 !important;
+    border-bottom: 2px solid transparent;
+  }
+
+  .admin-sidebar-footer {
+    display: none !important;
+  }
+
+  .admin-main {
+    width: 100%;
+  }
+
+  .admin-topbar {
+    padding: 16px clamp(16px, 4vw, 28px) !important;
+    min-height: 72px;
+  }
+
+  .admin-topbar h1 {
+    font-size: clamp(20px, 5vw, 26px) !important;
+  }
+
+  .admin-content {
+    padding: clamp(16px, 4vw, 24px) !important;
+  }
+
+  .dashboard-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+  }
+
+  .dashboard-stats > div {
+    padding: clamp(14px, 4vw, 20px) !important;
+    min-width: 0;
+  }
+
+  .dashboard-stats > div > div:nth-child(2) {
+    font-size: clamp(23px, 7vw, 28px) !important;
+    overflow-wrap: anywhere;
+  }
+
+  .dashboard-section {
+    padding: clamp(16px, 4vw, 24px) !important;
+  }
+
+  .dashboard-section > div:first-child {
+    align-items: flex-start !important;
+    flex-wrap: wrap;
+  }
+
+  .admin-page {
+    padding: clamp(14px, 4vw, 24px) !important;
+  }
+
+  .admin-page > .admin-page-header {
+    flex-wrap: wrap;
+    align-items: flex-start !important;
+    gap: 10px !important;
+  }
+
+  .admin-page > .header > div {
+    min-width: 0;
+  }
+
+  .admin-page .admin-course-header,
+  .admin-page .admin-playlist-top {
+    flex-wrap: wrap;
+    gap: 12px !important;
+  }
+
+  .admin-page .admin-course-actions,
+  .admin-page .actions {
+    flex-wrap: wrap;
+  }
+
+  .admin-page .courseCard,
+  .admin-page .card {
+    min-width: 0;
+  }
+
+  .admin-page .admin-playlist-thumb {
+    width: 76px !important;
+  }
+
+  .admin-page .admin-playlist-body {
+    padding: 16px !important;
+    min-width: 0;
+  }
+
+  .admin-page .admin-video-row,
+  .admin-page .admin-lesson-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .admin-page .admin-video-left,
+  .admin-page .admin-lesson-left {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .admin-page input,
+  .admin-page textarea {
+    box-sizing: border-box;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .admin-sidebar-header > div {
+    gap: 8px !important;
+  }
+
+  .admin-sidebar-header > div > span:last-child {
+    font-size: 15px !important;
+  }
+
+  .admin-nav > button {
+    padding-inline: 10px !important;
+    font-size: 12px !important;
+  }
+
+  .admin-nav > button span:first-child {
+    margin-right: 6px;
+  }
+
+  .dashboard-stats {
+    gap: 8px !important;
+  }
+
+  .dashboard-stats > div > div:nth-child(1) {
+    width: 32px !important;
+    height: 32px !important;
+  }
+
+  .dashboard-section > div:first-child button {
+    padding: 8px 10px !important;
+    font-size: 12px !important;
+  }
+}
