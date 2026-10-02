@@ -41,8 +41,8 @@ func CreateVideoUploadURLHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.CourseID == "" || req.Title == "" || req.SectionID == "" {
-		http.Error(w, "course_id, section_id and title are required", http.StatusBadRequest)
+	if req.CourseID == "" || req.Title == "" {
+		http.Error(w, "course_id and title are required", http.StatusBadRequest)
 		return
 	}
 
@@ -88,11 +88,15 @@ func createLessonRecord(lessonID string, req CreateUploadURLRequest) error {
 	lesson := map[string]interface{}{
 		"id":             lessonID,
 		"course_id":      req.CourseID,
-		"section_id":     req.SectionID,
 		"title":          req.Title,
 		"order_index":    req.OrderIndex,
 		"status":         "pending",
 		"video_provider": "supabase",
+	}
+	if req.SectionID == "" {
+		lesson["section_id"] = nil
+	} else {
+		lesson["section_id"] = req.SectionID
 	}
 
 	body, _ := json.Marshal(lesson)

@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { supabase } from "../lib/supabase";
+import { API_URL } from "../lib/api";
 
 type NavItem = "overview" | "courses" | "playlists" | "users";
 
@@ -100,7 +102,7 @@ export default function AdminDashboard() {
         </div>
 
         <div style={s.content}>
-          {activeNav === "overview" && <Overview />}
+          {activeNav === "overview" && <Overview navigate={navigate} />}
           {activeNav === "courses" && <Courses navigate={navigate} />}
           {activeNav === "playlists" && <Playlists navigate={navigate} />}
           {activeNav === "users" && <Users />}
@@ -110,12 +112,51 @@ export default function AdminDashboard() {
   );
 }
 
-function Overview() {
+interface DashboardData {
+  course_count: number;
+  lesson_count: number;
+  user_count: number;
+  recent_courses: { id: string; title: string; created_at: string }[];
+}
+
+function Overview({ navigate }: { navigate: (path: string) => void }) {
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [statsError, setStatsError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    const loadDashboard = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) throw new Error("Not authenticated.");
+
+        const response = await fetch(`${API_URL}/admin/dashboard`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!response.ok) {
+          const message = await response.text();
+          throw new Error(message || "Failed to load dashboard data.");
+        }
+        const data = await response.json() as DashboardData;
+        if (active) setDashboard(data);
+      } catch (err: unknown) {
+        if (active) {
+          setStatsError(err instanceof Error ? err.message : String(err));
+        }
+      }
+    };
+
+    void loadDashboard();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const stats = [
-    { label: "Total Courses", value: "0", icon: "▶", color: "#a435f0" },
-    { label: "Total Users", value: "0", icon: "◎", color: "#00b894" },
-    { label: "Total Lessons", value: "0", icon: "⊞", color: "#f39c12" },
-    { label: "Hours Watched", value: "0", icon: "◷", color: "#e55039" },
+    { label: "Total Courses", value: dashboard?.course_count ?? "—", icon: "▶", color: "#a435f0" },
+    { label: "Total Users", value: dashboard?.user_count ?? "—", icon: "◎", color: "#00b894" },
+    { label: "Total Lessons", value: dashboard?.lesson_count ?? "—", icon: "⊞", color: "#f39c12" },
+    { label: "Hours Watched", value: "—", icon: "◷", color: "#e55039" },
   ];
 
   return (
@@ -133,16 +174,28 @@ function Overview() {
           </div>
         ))}
       </div>
-
       <div style={os.section}>
-        <h2 style={os.sectionTitle}>Recent activity</h2>
-        <div style={os.empty}>
-          <div style={os.emptyIcon}>◎</div>
-          <p style={os.emptyText}>No activity yet</p>
-          <p style={os.emptySubText}>
-            Activity will appear here once users start engaging
-          </p>
+        <div style={os.sectionHeader}>
+          <h2 style={os.sectionTitle}>Recently added courses</h2>
+          <button onClick={() => navigate("/admin/courses")} style={os.secondaryBtn}>Manage courses</button>
         </div>
+        {statsError ? (
+          <p role="alert" style={os.statsError}>Could not load dashboard data: {statsError}</p>
+        ) : dashboard?.recent_courses.length ? (
+          <div style={os.recentList}>
+            {dashboard.recent_courses.map(course => (
+              <div key={course.id} style={os.recentRow}>
+                <span style={os.recentTitle}>{course.title}</span>
+                <span style={os.recentDate}>{new Date(course.created_at).toLocaleDateString()}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={os.empty}>
+            <div style={os.emptyIcon}>▶</div>
+            <p style={os.emptyText}>{dashboard ? "No courses have been added yet" : "Loading courses..."}</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -402,6 +455,7 @@ const os: Record<string, React.CSSProperties> = {
   },
   value: { fontSize: "28px", fontWeight: 700, color: "var(--text-primary)" },
   label: { fontSize: "13px", color: "var(--text-muted)" },
+  statsError: { color: "var(--error)", fontSize: "13px", marginBottom: "20px" },
   section: {
     background: "var(--bg-secondary)",
     border: "1px solid var(--border-light)",
@@ -414,6 +468,17 @@ const os: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     marginBottom: "20px",
   },
+  recentList: { display: "flex", flexDirection: "column" },
+  recentRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "16px",
+    padding: "14px 0",
+    borderTop: "1px solid var(--border-light)",
+  },
+  recentTitle: { color: "var(--text-primary)", fontSize: "14px", fontWeight: 500 },
+  recentDate: { color: "var(--text-muted)", fontSize: "12px", flexShrink: 0 },
   sectionTitle: {
     fontSize: "16px",
     fontWeight: 600,

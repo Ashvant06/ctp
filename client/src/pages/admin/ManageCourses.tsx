@@ -8,6 +8,7 @@ interface Lesson {
   title: string;
   status: string;
   order_index: number;
+  section_id: string | null;
 }
 
 interface Section {
@@ -23,7 +24,10 @@ interface Course {
   description: string;
   created_at: string;
   sections: Section[];
+  lessons: Lesson[];
 }
+
+const errorMessage = (err: unknown) => err instanceof Error ? err.message : String(err);
 
 export default function ManageCourses() {
   const navigate = useNavigate();
@@ -31,19 +35,38 @@ export default function ManageCourses() {
   const [loading, setLoading] = useState(true);
   const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
-    fetchCourses();
-  }, []);
+    let active = true;
+    const loadCourses = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) throw new Error("Not authenticated.");
+        const response = await fetch(`${API_URL}/admin/courses`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!response.ok) {
+          throw new Error(await response.text() || "Failed to load courses.");
+        }
+        const data = await response.json() as Course[];
+        if (!active) return;
+        setCourses(data.map(course => ({
+          ...course,
+          sections: course.sections ?? [],
+          lessons: course.lessons ?? [],
+        })));
+      } catch (err: unknown) {
+        if (active) setLoadError(errorMessage(err));
+      }
+      if (active) setLoading(false);
+    };
 
-  const fetchCourses = async () => {
-    const { data } = await supabase
-      .from("courses")
-      .select("*, sections(*, lessons(*))")
-      .order("created_at", { ascending: false });
-    if (data) setCourses(data);
-    setLoading(false);
-  };
+    void loadCourses();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleDeleteLesson = async (lessonId: string, courseId: string) => {
     if (!confirm("Delete this lesson and its video permanently?")) return;
@@ -65,14 +88,15 @@ export default function ManageCourses() {
         if (course.id !== courseId) return course;
         return {
           ...course,
+          lessons: course.lessons.filter(l => l.id !== lessonId),
           sections: course.sections.map(section => ({
             ...section,
             lessons: section.lessons.filter(l => l.id !== lessonId),
           })),
         };
       }));
-    } catch (err: any) {
-      alert(`Failed to delete: ${err.message}`);
+    } catch (err: unknown) {
+      alert(`Failed to delete: ${errorMessage(err)}`);
     } finally {
       setDeleting(null);
     }
@@ -89,22 +113,22 @@ export default function ManageCourses() {
       // Get all lessons first and delete their videos
       const course = courses.find(c => c.id === courseId);
       if (course) {
-        for (const section of course.sections) {
-          for (const lesson of section.lessons) {
-            await fetch(`${API_URL}/admin/lessons/delete?lesson_id=${lesson.id}`, {
-              method: "DELETE",
-              headers: { Authorization: `Bearer ${token}` },
-            });
-          }
+        for (const lesson of course.lessons) {
+          const res = await fetch(`${API_URL}/admin/lessons/delete?lesson_id=${lesson.id}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) throw new Error(await res.text());
         }
       }
 
       // Delete course from DB
-      await supabase.from("courses").delete().eq("id", courseId);
+      const { error } = await supabase.from("courses").delete().eq("id", courseId);
+      if (error) throw error;
 
       setCourses(prev => prev.filter(c => c.id !== courseId));
-    } catch (err: any) {
-      alert(`Failed to delete course: ${err.message}`);
+    } catch (err: unknown) {
+      alert(`Failed to delete course: ${errorMessage(err)}`);
     } finally {
       setDeleting(null);
     }
@@ -116,7 +140,13 @@ export default function ManageCourses() {
         <button onClick={() => navigate("/admin")} style={s.backBtn}>← Back</button>
         <div style={{ flex: 1 }}>
           <h1 style={s.title}>Manage courses</h1>
-          <p style={s.subtitle}>{courses.length} course{courses.length !== 1 ? "s" : ""} total</p>
+          <p style={s.subtitle}>
+            {loading
+              ? "Loading courses..."
+              : loadError
+                ? "Courses could not be loaded"
+                : `${courses.length} course${courses.length !== 1 ? "s" : ""} total`}
+          </p>
         </div>
         <button onClick={() => navigate("/admin/courses/create")} style={s.createBtn}>
           + New course
@@ -125,6 +155,8 @@ export default function ManageCourses() {
 
       {loading ? (
         <div style={s.loading}>Loading courses...</div>
+      ) : loadError ? (
+        <div role="alert" style={s.loading}>Failed to load courses: {loadError}</div>
       ) : courses.length === 0 ? (
         <div style={s.empty}>
           <p style={s.emptyTitle}>No courses yet</p>
@@ -143,7 +175,7 @@ export default function ManageCourses() {
                   <h2 style={s.courseName}>{course.title}</h2>
                   <p style={s.courseMeta}>
                     {course.sections.length} section{course.sections.length !== 1 ? "s" : ""} ·{" "}
-                    {course.sections.reduce((acc, s) => acc + s.lessons.length, 0)} lessons ·{" "}
+                    {course.lessons.length} lessons ·{" "}
                     {new Date(course.created_at).toLocaleDateString()}
                   </p>
                 </div>
@@ -167,6 +199,44 @@ export default function ManageCourses() {
               {/* Expanded lessons */}
               {expandedCourse === course.id && (
                 <div style={s.sectionsWrap}>
+                  {(() => {
+                    const sectionLessonIds = new Set(
+                      course.sections.flatMap(section => section.lessons.map(lesson => lesson.id))
+                    );
+                    const unsectionedLessons = course.lessons.filter(
+                      lesson => !sectionLessonIds.has(lesson.id)
+                    );
+
+                    return unsectionedLessons.length > 0 ? (
+                      <div style={s.sectionBlock}>
+                        <div style={s.sectionTitle}>Playlist videos</div>
+                        {unsectionedLessons
+                          .sort((a, b) => a.order_index - b.order_index)
+                          .map((lesson, li) => (
+                            <div key={lesson.id} style={s.lessonRow}>
+                              <div style={s.lessonLeft}>
+                                <span style={s.lessonNum}>{li + 1}.</span>
+                                <span style={s.lessonName}>{lesson.title}</span>
+                                <span style={{
+                                  ...s.statusBadge,
+                                  color: lesson.status === "ready" ? "var(--success)" : "var(--warning)",
+                                  background: lesson.status === "ready" ? "var(--success-soft)" : "var(--warning-soft)",
+                                }}>
+                                  {lesson.status}
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => handleDeleteLesson(lesson.id, course.id)}
+                                disabled={deleting === lesson.id}
+                                style={s.deleteLessonBtn}
+                              >
+                                {deleting === lesson.id ? "..." : "🗑 Delete"}
+                              </button>
+                            </div>
+                          ))}
+                      </div>
+                    ) : null;
+                  })()}
                   {course.sections
                     .sort((a, b) => a.order_index - b.order_index)
                     .map((section, si) => (
