@@ -58,6 +58,7 @@ func main() {
 	}))
 
 	http.HandleFunc("/admin/courses", corsMiddleware(middleware.Auth(middleware.AdminOnly(handlers.CoursesHandler))))
+	http.HandleFunc("/admin/dashboard", corsMiddleware(middleware.Auth(middleware.AdminOnly(handlers.AdminDashboardHandler))))
 	http.HandleFunc("/admin/sections", corsMiddleware(middleware.Auth(middleware.AdminOnly(handlers.SectionsHandler))))
 	http.HandleFunc("/admin/videos/upload-url", corsMiddleware(middleware.Auth(middleware.AdminOnly(handlers.CreateVideoUploadURLHandler))))
 	http.HandleFunc("/admin/videos/confirm", corsMiddleware(middleware.Auth(middleware.AdminOnly(handlers.ConfirmVideoUploadHandler))))
